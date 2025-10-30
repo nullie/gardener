@@ -7,7 +7,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use eyre::Context;
 use serde::Deserialize;
+use systemd_tmpfiles::Directive;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -32,6 +34,8 @@ struct DataConfig {
     cache: Paths,
     #[serde(default)]
     data: Paths,
+    #[serde(default)]
+    auto: Paths,
 }
 
 #[derive(Deserialize, Debug, Default)]
@@ -40,9 +44,13 @@ struct Paths {
     directories: Vec<PathBuf>,
     #[serde(default)]
     files: Vec<PathBuf>,
+    #[serde(default)]
+    symlinks: Vec<PathBuf>,
 }
 
 fn main() -> eyre::Result<()> {
+    let auto_entries = get_systemd_tmpfiles()?;
+
     let input = std::fs::File::open("/etc/gardener.json")?;
     let buffered = BufReader::new(input);
 
@@ -51,6 +59,7 @@ fn main() -> eyre::Result<()> {
     let mut cache_directories = Vec::new();
     let mut data_directories = Vec::new();
     let mut cache_files = Vec::new();
+    let mut data_files = Vec::new();
 
     for (user, paths) in &config.users {
         let home_dir = Path::new("/home").join(user);
@@ -84,14 +93,41 @@ fn main() -> eyre::Result<()> {
         for file in &module.system.cache.files {
             cache_files.push(file.clone());
         }
+
+        for file in &module.system.data.files {
+            data_files.push(file.clone());
+        }
+
+        for file in &module.system.auto.symlinks {
+            data_files.push(file.clone());
+        }
+
+        for directory in &module.system.auto.directories {
+            cache_directories.push(directory.clone());
+        }
+
+        for file in &module.system.auto.files {
+            cache_files.push(file.clone());
+        }
     }
 
     let tree = make_tree(
         cache_directories
             .iter()
             .chain(&data_directories)
+            .chain(auto_entries.iter().filter_map(|e| match e {
+                Entry::Directory(path) => Some(path),
+                _ => None,
+            }))
             .map(AsRef::as_ref),
-        cache_files.iter().map(AsRef::as_ref),
+        cache_files
+            .iter()
+            .chain(&data_files)
+            .chain(auto_entries.iter().filter_map(|e| match e {
+                Entry::File(path) => Some(path),
+                _ => None,
+            }))
+            .map(AsRef::as_ref),
     );
 
     let mut unknown_dirs = Vec::new();
@@ -170,21 +206,74 @@ fn visit_dirs(
     unknown_dirs: &mut Vec<PathBuf>,
     unknown_files: &mut Vec<PathBuf>,
 ) -> eyre::Result<()> {
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() {
-            if let Some(node) = tree_node.directories.get(entry.file_name().as_os_str()) {
-                if !node.is_leaf {
-                    visit_dirs(&path, node, unknown_dirs, unknown_files)?;
+    match fs::read_dir(dir) {
+        Ok(entries) => {
+            for entry in entries {
+                let entry = entry?;
+                let path = entry.path();
+
+                if entry.file_type()?.is_dir() {
+                    if let Some(node) = tree_node.directories.get(entry.file_name().as_os_str()) {
+                        if !node.is_leaf {
+                            visit_dirs(&path, node, unknown_dirs, unknown_files)?;
+                        }
+                    } else {
+                        unknown_dirs.push(path);
+                    }
+                } else if !tree_node.files.contains(entry.file_name().as_os_str()) {
+                    unknown_files.push(path);
                 }
-            } else {
-                unknown_dirs.push(path);
             }
-        } else if !tree_node.files.contains(entry.file_name().as_os_str()) {
-            unknown_files.push(path);
+        }
+        Err(e) => {
+            eprintln!("Failed to read directory {:?}: {}", dir, e)
         }
     }
 
     Ok(())
+}
+
+fn get_systemd_tmpfiles() -> eyre::Result<Vec<Entry>> {
+    let output = std::process::Command::new("systemd-tmpfiles")
+        .arg("--cat-config")
+        .output()?;
+
+    // FIXME: return error
+    assert!(output.status.success());
+
+    let output = String::from_utf8(output.stdout)?;
+
+    let parsed = systemd_tmpfiles::parser::parse_str(&output)?;
+
+    let mut entries = Vec::new();
+
+    for entry in parsed {
+        match entry.directive() {
+            Directive::CreateFile { .. }
+            | Directive::CreateFifo { .. }
+            | Directive::CreateSymlink { .. }
+            | Directive::CreateCharDeviceNode { .. }
+            | Directive::CreateBlockDeviceNode { .. }
+            | Directive::WriteToFile { .. } => {
+                // FIXME: return error
+                assert!(!entry.path_is_glob());
+                entries.push(Entry::File(entry.path().into()));
+            }
+            Directive::CreateDirectory { .. } | Directive::CreateSubvolume { .. } => {
+                // FIXME: return error
+                assert!(!entry.path_is_glob());
+                entries.push(Entry::Directory(entry.path().into()))
+            }
+            _ => (),
+        }
+    }
+
+    Ok(entries)
+}
+
+#[derive(Debug)]
+enum Entry {
+    File(PathBuf),
+    Directory(PathBuf),
+    RecursiveDirectory(PathBuf),
 }
