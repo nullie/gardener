@@ -1,0 +1,1 @@
+- [ ] rename auto to ephemeral

@@ -1,139 +1,129 @@
 use std::{
-    collections::{HashMap, HashSet},
-    ffi::{OsStr, OsString},
+    collections::HashMap,
+    ffi::OsString,
     fs,
     io::BufReader,
-    os::unix::fs::DirEntryExt,
+    os::unix::fs::FileTypeExt,
     path::{Path, PathBuf},
 };
 
 use eyre::Context;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use systemd_tmpfiles::Directive;
+use thiserror::Error;
+
+fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    T: Default + Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    let opt = Option::deserialize(deserializer)?;
+    Ok(opt.unwrap_or_default())
+}
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct Config {
     #[serde(default)]
-    persistent_modules: HashMap<String, Module>,
+    modules: HashMap<String, Module>,
     #[serde(default)]
-    users: HashMap<String, Paths>,
+    users: HashMap<String, DataConfig>,
 }
 
 #[derive(Deserialize, Debug, Default)]
 struct Module {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_default")]
     user: DataConfig,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_default")]
     system: DataConfig,
 }
 
 #[derive(Deserialize, Debug, Default)]
 struct DataConfig {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_default")]
     cache: Paths,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_default")]
     data: Paths,
-    #[serde(default)]
-    auto: Paths,
+    #[serde(default, deserialize_with = "deserialize_null_default")]
+    ephemeral: Paths,
+}
+
+impl DataConfig {
+    fn add_to_tree(&self, root: &Path, tree: &mut Tree) -> eyre::Result<()> {
+        self.cache.add_to_tree(root, tree)?;
+        self.data.add_to_tree(root, tree)?;
+        self.ephemeral.add_to_tree(root, tree)?;
+
+        Ok(())
+    }
 }
 
 #[derive(Deserialize, Debug, Default)]
 struct Paths {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_default")]
+    intermediate: Vec<PathBuf>,
+    #[serde(default, deserialize_with = "deserialize_null_default")]
     directories: Vec<PathBuf>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_default")]
     files: Vec<PathBuf>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_null_default")]
     symlinks: Vec<PathBuf>,
 }
 
-fn main() -> eyre::Result<()> {
-    let auto_entries = get_systemd_tmpfiles()?;
+impl Paths {
+    fn add_to_tree(&self, root: &Path, tree: &mut Tree) -> eyre::Result<()> {
+        for directory in &self.intermediate {
+            tree.add_directory_path(&root.join(directory))?;
+        }
+        for directory in &self.directories {
+            tree.add_entry_path(&root.join(directory), Entry::Directory)?;
+        }
+        for file in &self.files {
+            tree.add_entry_path(&root.join(file), Entry::File)?;
+        }
+        for symlink in &self.symlinks {
+            tree.add_entry_path(&root.join(symlink), Entry::Symlink)?;
+        }
 
+        Ok(())
+    }
+}
+
+fn main() -> eyre::Result<()> {
     let input = std::fs::File::open("/etc/gardener.json")?;
     let buffered = BufReader::new(input);
 
     let config: Config = serde_json::from_reader(buffered)?;
 
-    let mut cache_directories = Vec::new();
-    let mut data_directories = Vec::new();
-    let mut cache_files = Vec::new();
-    let mut data_files = Vec::new();
+    let mut tree = Tree::new();
 
-    for (user, paths) in &config.users {
+    add_systemd_tmpfiles(&mut tree)?;
+
+    for (user, data_config) in &config.users {
         let home_dir = Path::new("/home").join(user);
 
-        for directory in &paths.directories {
-            data_directories.push(home_dir.join(directory));
-        }
+        data_config.add_to_tree(&home_dir, &mut tree)?;
 
-        for (name, module) in &config.persistent_modules {
-            for directory in &module.user.cache.directories {
-                let path = home_dir.join(directory);
-                cache_directories.push(path);
-            }
-
-            for directory in &module.user.data.directories {
-                let path = home_dir.join(directory);
-                data_directories.push(path);
-            }
+        for module in config.modules.values() {
+            module.user.add_to_tree(&home_dir, &mut tree)?;
         }
     }
 
-    for (name, module) in &config.persistent_modules {
-        for directory in &module.system.cache.directories {
-            cache_directories.push(directory.clone());
-        }
+    let root = Path::new("/");
 
-        for directory in &module.system.data.directories {
-            data_directories.push(directory.clone());
-        }
-
-        for file in &module.system.cache.files {
-            cache_files.push(file.clone());
-        }
-
-        for file in &module.system.data.files {
-            data_files.push(file.clone());
-        }
-
-        for file in &module.system.auto.symlinks {
-            data_files.push(file.clone());
-        }
-
-        for directory in &module.system.auto.directories {
-            cache_directories.push(directory.clone());
-        }
-
-        for file in &module.system.auto.files {
-            cache_files.push(file.clone());
-        }
+    for module in config.modules.values() {
+        module.system.add_to_tree(root, &mut tree)?;
     }
-
-    let tree = make_tree(
-        cache_directories
-            .iter()
-            .chain(&data_directories)
-            .chain(auto_entries.iter().filter_map(|e| match e {
-                Entry::Directory(path) => Some(path),
-                _ => None,
-            }))
-            .map(AsRef::as_ref),
-        cache_files
-            .iter()
-            .chain(&data_files)
-            .chain(auto_entries.iter().filter_map(|e| match e {
-                Entry::File(path) => Some(path),
-                _ => None,
-            }))
-            .map(AsRef::as_ref),
-    );
 
     let mut unknown_dirs = Vec::new();
     let mut unknown_files = Vec::new();
 
-    visit_dirs(Path::new("/"), &tree, &mut unknown_dirs, &mut unknown_files)?;
+    visit_dirs(
+        Path::new("/"),
+        &tree.root,
+        &mut unknown_dirs,
+        &mut unknown_files,
+    )?;
 
     println!("Unknown dirs:");
     for dir in unknown_dirs {
@@ -148,61 +138,135 @@ fn main() -> eyre::Result<()> {
     Ok(())
 }
 
-#[derive(Debug)]
-struct TreeNode<'a> {
-    directories: HashMap<&'a OsStr, TreeNode<'a>>,
-    files: HashSet<&'a OsStr>,
-    is_leaf: bool,
+#[derive(Debug, Eq, PartialEq)]
+enum Entry {
+    File,
+    Symlink,
+    Directory,
 }
 
-impl TreeNode<'_> {
+#[derive(Debug)]
+enum TreeNode {
+    Entry(Entry),
+    Directory(HashMap<OsString, TreeNode>),
+}
+
+struct Tree {
+    root: HashMap<OsString, TreeNode>,
+}
+
+impl Tree {
     fn new() -> Self {
         Self {
-            is_leaf: false,
-            directories: HashMap::new(),
-            files: HashSet::new(),
+            root: HashMap::new(),
         }
+    }
+
+    fn path_to_components(path: &Path) -> Result<Vec<OsString>, TreeError> {
+        let mut components = path.components();
+
+        if components.next() != Some(std::path::Component::RootDir) {
+            panic!("Path must be absolute");
+        }
+
+        let intermediate: Vec<OsString> = components
+            .map(|c| match c {
+                std::path::Component::Normal(c) => Ok(c.to_owned()),
+                c => Err(TreeError::UnexpectedPathComponent(format!("{:?}", c))),
+            })
+            .collect::<Result<_, TreeError>>()?;
+
+        Ok(intermediate)
+    }
+
+    fn add_directory_path(&mut self, path: &Path) -> eyre::Result<()> {
+        self.add_directory(Self::path_to_components(path)?)
+            .wrap_err_with(|| format!("path: {path:?}"))
+    }
+
+    fn add_entry_path(&mut self, path: &Path, entry: Entry) -> eyre::Result<()> {
+        self.add_entry(Self::path_to_components(path)?.into_iter(), entry)
+            .wrap_err_with(|| format!("path: {path:?}"))
+    }
+
+    fn add_directory(
+        &mut self,
+        components: impl IntoIterator<Item = OsString>,
+    ) -> Result<(), TreeError> {
+        let mut directory = &mut self.root;
+
+        for component in components {
+            let entry = directory
+                .entry(component)
+                .or_insert_with(|| TreeNode::Directory(HashMap::new()));
+
+            match entry {
+                TreeNode::Directory(d) => {
+                    directory = d;
+                }
+                _ => return Err(TreeError::OverlappingPath),
+            }
+        }
+
+        Ok(())
+    }
+
+    fn add_entry(
+        &mut self,
+        mut components: impl DoubleEndedIterator<Item = OsString>,
+        entry: Entry,
+    ) -> Result<(), TreeError> {
+        let mut directory = &mut self.root;
+
+        let Some(last_component) = components.next_back() else {
+            return Err(TreeError::EmptyPath);
+        };
+
+        for component in components {
+            let entry = directory
+                .entry(component)
+                .or_insert_with(|| TreeNode::Directory(HashMap::new()));
+
+            match entry {
+                TreeNode::Directory(d) => {
+                    directory = d;
+                }
+                TreeNode::Entry(Entry::Directory) => return Ok(()),
+                _ => return Err(TreeError::OverlappingPath),
+            }
+        }
+
+        match directory.entry(last_component) {
+            std::collections::hash_map::Entry::Vacant(vacant) => {
+                vacant.insert(TreeNode::Entry(entry));
+            }
+            std::collections::hash_map::Entry::Occupied(occupied) => {
+                let occupied = occupied.into_mut();
+                if let TreeNode::Directory(_) = occupied {
+                    *occupied = TreeNode::Entry(Entry::Directory);
+                } else {
+                    return Err(TreeError::OverlappingPath);
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
-fn make_tree<'a>(
-    directories: impl IntoIterator<Item = &'a Path>,
-    files: impl IntoIterator<Item = &'a Path>,
-) -> TreeNode<'a> {
-    let mut root = TreeNode::new();
-
-    for directory in directories {
-        let mut node = &mut root;
-
-        for component in directory.strip_prefix("/").unwrap() {
-            node = node
-                .directories
-                .entry(component)
-                .or_insert_with(TreeNode::new);
-        }
-
-        node.is_leaf = true;
-    }
-
-    for file in files {
-        let mut node = &mut root;
-
-        for component in file.parent().unwrap().strip_prefix("/").unwrap() {
-            node = node
-                .directories
-                .entry(component)
-                .or_insert_with(TreeNode::new);
-        }
-
-        node.files.insert(file.file_name().unwrap());
-    }
-
-    root
+#[derive(Error, Debug)]
+enum TreeError {
+    #[error("path is empty")]
+    EmptyPath,
+    #[error("path is overlapping")]
+    OverlappingPath,
+    #[error("unexpected component")]
+    UnexpectedPathComponent(String),
 }
 
 fn visit_dirs(
     dir: &Path,
-    tree_node: &TreeNode,
+    tree_directory: &HashMap<OsString, TreeNode>,
     unknown_dirs: &mut Vec<PathBuf>,
     unknown_files: &mut Vec<PathBuf>,
 ) -> eyre::Result<()> {
@@ -211,17 +275,69 @@ fn visit_dirs(
             for entry in entries {
                 let entry = entry?;
                 let path = entry.path();
+                let file_type = entry.file_type()?;
+                let tree_entry = tree_directory.get(entry.file_name().as_os_str());
 
-                if entry.file_type()?.is_dir() {
-                    if let Some(node) = tree_node.directories.get(entry.file_name().as_os_str()) {
-                        if !node.is_leaf {
-                            visit_dirs(&path, node, unknown_dirs, unknown_files)?;
-                        }
-                    } else {
-                        unknown_dirs.push(path);
+                match tree_entry {
+                    Some(TreeNode::Directory(entry_tree_directory)) if file_type.is_dir() => {
+                        visit_dirs(&path, entry_tree_directory, unknown_dirs, unknown_files)?;
                     }
-                } else if !tree_node.files.contains(entry.file_name().as_os_str()) {
-                    unknown_files.push(path);
+                    None => {
+                        if file_type.is_dir() {
+                            unknown_dirs.push(path);
+                        } else {
+                            unknown_files.push(path);
+                        };
+                    }
+                    Some(TreeNode::Entry(expected_entry)) => {
+                        let found_entry = if file_type.is_dir() {
+                            Entry::Directory
+                        } else if file_type.is_file()
+                            || file_type.is_fifo()
+                            || file_type.is_socket()
+                            || file_type.is_char_device()
+                            || file_type.is_block_device()
+                        {
+                            Entry::File
+                        } else if file_type.is_symlink() {
+                            Entry::Symlink
+                        } else {
+                            panic!("Unknown file type: {file_type:?}")
+                        };
+
+                        if &found_entry != expected_entry {
+                            eprintln!(
+                                "{path:?} expected {expected_entry:?}, found {found_entry:?}"
+                            );
+                        }
+                    }
+                    Some(tree_entry) => {
+                        let found = if file_type.is_dir() {
+                            "directory"
+                        } else if file_type.is_symlink() {
+                            "symlink"
+                        } else if file_type.is_file() {
+                            "file"
+                        } else if file_type.is_fifo()
+                            || file_type.is_socket()
+                            || file_type.is_char_device()
+                            || file_type.is_block_device()
+                        {
+                            "special file"
+                        } else {
+                            "unknown file"
+                        };
+
+                        let expected = match tree_entry {
+                            TreeNode::Directory(_) | TreeNode::Entry(Entry::Directory) => {
+                                "directory"
+                            }
+                            TreeNode::Entry(Entry::Symlink) => "symlink",
+                            TreeNode::Entry(Entry::File) => "file",
+                        };
+
+                        eprintln!("{path:?}: unexpected entry, expected {expected}, found {found}");
+                    }
                 }
             }
         }
@@ -233,7 +349,7 @@ fn visit_dirs(
     Ok(())
 }
 
-fn get_systemd_tmpfiles() -> eyre::Result<Vec<Entry>> {
+fn add_systemd_tmpfiles(tree: &mut Tree) -> eyre::Result<()> {
     let output = std::process::Command::new("systemd-tmpfiles")
         .arg("--cat-config")
         .output()?;
@@ -245,35 +361,29 @@ fn get_systemd_tmpfiles() -> eyre::Result<Vec<Entry>> {
 
     let parsed = systemd_tmpfiles::parser::parse_str(&output)?;
 
-    let mut entries = Vec::new();
-
     for entry in parsed {
         match entry.directive() {
+            Directive::CreateSymlink { .. } => {
+                tree.add_entry_path(Path::new(entry.path()), Entry::Symlink)?;
+                assert!(!entry.path_is_glob());
+            }
             Directive::CreateFile { .. }
             | Directive::CreateFifo { .. }
-            | Directive::CreateSymlink { .. }
             | Directive::CreateCharDeviceNode { .. }
             | Directive::CreateBlockDeviceNode { .. }
             | Directive::WriteToFile { .. } => {
                 // FIXME: return error
                 assert!(!entry.path_is_glob());
-                entries.push(Entry::File(entry.path().into()));
+                tree.add_entry_path(Path::new(entry.path()), Entry::File)?;
             }
             Directive::CreateDirectory { .. } | Directive::CreateSubvolume { .. } => {
                 // FIXME: return error
                 assert!(!entry.path_is_glob());
-                entries.push(Entry::Directory(entry.path().into()))
+                tree.add_directory_path(Path::new(entry.path()))?;
             }
             _ => (),
         }
     }
 
-    Ok(entries)
-}
-
-#[derive(Debug)]
-enum Entry {
-    File(PathBuf),
-    Directory(PathBuf),
-    RecursiveDirectory(PathBuf),
+    Ok(())
 }
