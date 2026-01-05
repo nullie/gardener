@@ -3,6 +3,8 @@ name = "gardener"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+
 [dependencies]
 clap = "4.5.49"
 eyre = "0.6.12"
