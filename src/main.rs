@@ -49,10 +49,15 @@ struct DataConfig {
 }
 
 impl DataConfig {
-    fn add_to_tree(&self, root: &Path, tree: &mut Tree) -> eyre::Result<()> {
-        self.cache.add_to_tree(root, tree)?;
-        self.data.add_to_tree(root, tree)?;
-        self.ephemeral.add_to_tree(root, tree)?;
+    fn add_to_tree<'a>(
+        &self,
+        owner: Owner<'a>,
+        root: &Path,
+        tree: &mut Tree<'a>,
+    ) -> eyre::Result<()> {
+        self.cache.add_to_tree(owner, root, tree)?;
+        self.data.add_to_tree(owner, root, tree)?;
+        self.ephemeral.add_to_tree(owner, root, tree)?;
 
         Ok(())
     }
@@ -71,22 +76,33 @@ struct Paths {
 }
 
 impl Paths {
-    fn add_to_tree(&self, root: &Path, tree: &mut Tree) -> eyre::Result<()> {
+    fn add_to_tree<'a>(
+        &self,
+        owner: Owner<'a>,
+        root: &Path,
+        tree: &mut Tree<'a>,
+    ) -> eyre::Result<()> {
         for directory in &self.intermediate {
-            tree.add_directory_path(&root.join(directory))?;
+            tree.add_directory_path(owner, &root.join(directory))?;
         }
         for directory in &self.directories {
-            tree.add_entry_path(&root.join(directory), Entry::Directory)?;
+            tree.add_entry_path(owner, &root.join(directory), Entry::Directory)?;
         }
         for file in &self.files {
-            tree.add_entry_path(&root.join(file), Entry::File)?;
+            tree.add_entry_path(owner, &root.join(file), Entry::File)?;
         }
         for symlink in &self.symlinks {
-            tree.add_entry_path(&root.join(symlink), Entry::Symlink)?;
+            tree.add_entry_path(owner, &root.join(symlink), Entry::Symlink)?;
         }
 
         Ok(())
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum Owner<'a> {
+    User(&'a str),
+    Module(&'a str),
 }
 
 fn main() -> eyre::Result<()> {
@@ -102,17 +118,21 @@ fn main() -> eyre::Result<()> {
     for (user, data_config) in &config.users {
         let home_dir = Path::new("/home").join(user);
 
-        data_config.add_to_tree(&home_dir, &mut tree)?;
+        data_config.add_to_tree(Owner::User(user), &home_dir, &mut tree)?;
 
-        for module in config.modules.values() {
-            module.user.add_to_tree(&home_dir, &mut tree)?;
+        for (name, module) in &config.modules {
+            module
+                .user
+                .add_to_tree(Owner::Module(name), &home_dir, &mut tree)?;
         }
     }
 
     let root = Path::new("/");
 
-    for module in config.modules.values() {
-        module.system.add_to_tree(root, &mut tree)?;
+    for (name, module) in &config.modules {
+        module
+            .system
+            .add_to_tree(Owner::Module(name), root, &mut tree)?;
     }
 
     let mut unknown_dirs = Vec::new();
@@ -146,16 +166,16 @@ enum Entry {
 }
 
 #[derive(Debug)]
-enum TreeNode {
-    Entry(Entry),
-    Directory(HashMap<OsString, TreeNode>),
+enum TreeNode<'a> {
+    Entry(Owner<'a>, Entry),
+    Directory(HashMap<OsString, TreeNode<'a>>),
 }
 
-struct Tree {
-    root: HashMap<OsString, TreeNode>,
+struct Tree<'a> {
+    root: HashMap<OsString, TreeNode<'a>>,
 }
 
-impl Tree {
+impl<'a> Tree<'a> {
     fn new() -> Self {
         Self {
             root: HashMap::new(),
@@ -179,18 +199,19 @@ impl Tree {
         Ok(intermediate)
     }
 
-    fn add_directory_path(&mut self, path: &Path) -> eyre::Result<()> {
-        self.add_directory(Self::path_to_components(path)?)
+    fn add_directory_path(&mut self, owner: Owner, path: &Path) -> eyre::Result<()> {
+        self.add_directory(owner, Self::path_to_components(path)?)
             .wrap_err_with(|| format!("path: {path:?}"))
     }
 
-    fn add_entry_path(&mut self, path: &Path, entry: Entry) -> eyre::Result<()> {
-        self.add_entry(Self::path_to_components(path)?.into_iter(), entry)
+    fn add_entry_path(&mut self, owner: Owner<'a>, path: &Path, entry: Entry) -> eyre::Result<()> {
+        self.add_entry(owner, Self::path_to_components(path)?.into_iter(), entry)
             .wrap_err_with(|| format!("path: {path:?}"))
     }
 
     fn add_directory(
         &mut self,
+        owner: Owner,
         components: impl IntoIterator<Item = OsString>,
     ) -> Result<(), TreeError> {
         let mut directory = &mut self.root;
@@ -213,6 +234,7 @@ impl Tree {
 
     fn add_entry(
         &mut self,
+        owner: Owner<'a>,
         mut components: impl DoubleEndedIterator<Item = OsString>,
         entry: Entry,
     ) -> Result<(), TreeError> {
@@ -231,19 +253,21 @@ impl Tree {
                 TreeNode::Directory(d) => {
                     directory = d;
                 }
-                TreeNode::Entry(Entry::Directory) => return Ok(()),
+                TreeNode::Entry(_, Entry::Directory) => return Ok(()),
                 _ => return Err(TreeError::OverlappingPath),
             }
         }
 
         match directory.entry(last_component) {
             std::collections::hash_map::Entry::Vacant(vacant) => {
-                vacant.insert(TreeNode::Entry(entry));
+                vacant.insert(TreeNode::Entry(owner, entry));
             }
             std::collections::hash_map::Entry::Occupied(occupied) => {
                 let occupied = occupied.into_mut();
-                if let TreeNode::Directory(_) = occupied {
-                    *occupied = TreeNode::Entry(Entry::Directory);
+                if let TreeNode::Directory(d) = occupied
+                    && (d.is_empty() || matches!(entry, Entry::Directory))
+                {
+                    *occupied = TreeNode::Entry(owner, entry);
                 } else {
                     return Err(TreeError::OverlappingPath);
                 }
@@ -289,7 +313,7 @@ fn visit_dirs(
                             unknown_files.push(path);
                         };
                     }
-                    Some(TreeNode::Entry(expected_entry)) => {
+                    Some(TreeNode::Entry(owner, expected_entry)) => {
                         let found_entry = if file_type.is_dir() {
                             Entry::Directory
                         } else if file_type.is_file()
@@ -329,11 +353,11 @@ fn visit_dirs(
                         };
 
                         let expected = match tree_entry {
-                            TreeNode::Directory(_) | TreeNode::Entry(Entry::Directory) => {
+                            TreeNode::Directory(_) | TreeNode::Entry(_, Entry::Directory) => {
                                 "directory"
                             }
-                            TreeNode::Entry(Entry::Symlink) => "symlink",
-                            TreeNode::Entry(Entry::File) => "file",
+                            TreeNode::Entry(_, Entry::Symlink) => "symlink",
+                            TreeNode::Entry(_, Entry::File) => "file",
                         };
 
                         eprintln!("{path:?}: unexpected entry, expected {expected}, found {found}");
@@ -350,6 +374,7 @@ fn visit_dirs(
 }
 
 fn add_systemd_tmpfiles(tree: &mut Tree) -> eyre::Result<()> {
+    let owner = Owner::Module("systemd-tmpfiles");
     let output = std::process::Command::new("systemd-tmpfiles")
         .arg("--cat-config")
         .output()?;
@@ -364,7 +389,7 @@ fn add_systemd_tmpfiles(tree: &mut Tree) -> eyre::Result<()> {
     for entry in parsed {
         match entry.directive() {
             Directive::CreateSymlink { .. } => {
-                tree.add_entry_path(Path::new(entry.path()), Entry::Symlink)?;
+                tree.add_entry_path(owner, Path::new(entry.path()), Entry::Symlink)?;
                 assert!(!entry.path_is_glob());
             }
             Directive::CreateFile { .. }
@@ -374,12 +399,12 @@ fn add_systemd_tmpfiles(tree: &mut Tree) -> eyre::Result<()> {
             | Directive::WriteToFile { .. } => {
                 // FIXME: return error
                 assert!(!entry.path_is_glob());
-                tree.add_entry_path(Path::new(entry.path()), Entry::File)?;
+                tree.add_entry_path(owner, Path::new(entry.path()), Entry::File)?;
             }
             Directive::CreateDirectory { .. } | Directive::CreateSubvolume { .. } => {
                 // FIXME: return error
                 assert!(!entry.path_is_glob());
-                tree.add_directory_path(Path::new(entry.path()))?;
+                tree.add_directory_path(owner, Path::new(entry.path()))?;
             }
             _ => (),
         }
