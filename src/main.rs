@@ -18,6 +18,6 @@ fn main() -> eyre::Result<()> {
 
     match cli.command {
         Command::CheckUntracked => gardener::untracked::check_untracked(),
-        Command::CheckTracked => todo!(),
+        Command::CheckTracked => gardener::tracked::check_tracked(),
     }
 }

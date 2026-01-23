@@ -12,6 +12,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 systemd_tmpfiles = "0.2.7"
 thiserror = "2.0.17"
+time = "0.3.44"
 
 [patch.crates-io]
 systemd_tmpfiles = { path = "/home/nullie/Documents/third-party-projects/paketkoll/crates/systemd_tmpfiles" }

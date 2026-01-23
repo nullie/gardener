@@ -542,6 +542,7 @@ dependencies = [
  "serde_json",
  "systemd_tmpfiles",
  "thiserror 2.0.17",
+ "time",
 ]
 
 [[package]]
