@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     io::BufReader,
     path::{Path, PathBuf},
 };
@@ -21,9 +21,9 @@ where
 #[serde(rename_all = "camelCase")]
 pub struct Config {
     #[serde(default)]
-    pub modules: HashMap<String, Module>,
+    pub modules: BTreeMap<String, Module>,
     #[serde(default)]
-    pub users: HashMap<String, DataConfig>,
+    pub users: BTreeMap<String, DataConfig>,
 }
 
 #[derive(Deserialize, Debug, Default)]

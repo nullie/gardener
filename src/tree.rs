@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     ffi::OsString,
     path::{Path, PathBuf},
 };
@@ -11,17 +11,17 @@ use thiserror::Error;
 #[derive(Debug)]
 pub enum TreeNode<'a> {
     Entry(Owner<'a>, EntryType),
-    Directory(HashMap<OsString, TreeNode<'a>>),
+    Directory(BTreeMap<OsString, TreeNode<'a>>),
 }
 
 pub struct Tree<'a> {
-    pub root: HashMap<OsString, TreeNode<'a>>,
+    pub root: BTreeMap<OsString, TreeNode<'a>>,
 }
 
 impl<'a> Tree<'a> {
     pub fn new() -> Self {
         Self {
-            root: HashMap::new(),
+            root: BTreeMap::new(),
         }
     }
 
@@ -67,7 +67,7 @@ impl<'a> Tree<'a> {
         for component in components {
             let entry = directory
                 .entry(component)
-                .or_insert_with(|| TreeNode::Directory(HashMap::new()));
+                .or_insert_with(|| TreeNode::Directory(BTreeMap::new()));
 
             match entry {
                 TreeNode::Directory(d) => {
@@ -95,7 +95,7 @@ impl<'a> Tree<'a> {
         for component in components {
             let entry = directory
                 .entry(component)
-                .or_insert_with(|| TreeNode::Directory(HashMap::new()));
+                .or_insert_with(|| TreeNode::Directory(BTreeMap::new()));
 
             match entry {
                 TreeNode::Directory(d) => {
@@ -107,10 +107,10 @@ impl<'a> Tree<'a> {
         }
 
         match directory.entry(last_component) {
-            std::collections::hash_map::Entry::Vacant(vacant) => {
+            std::collections::btree_map::Entry::Vacant(vacant) => {
                 vacant.insert(TreeNode::Entry(owner, entry));
             }
-            std::collections::hash_map::Entry::Occupied(occupied) => {
+            std::collections::btree_map::Entry::Occupied(occupied) => {
                 let occupied = occupied.into_mut();
                 if let TreeNode::Directory(d) = occupied
                     && (d.is_empty() || matches!(entry, EntryType::Directory))
@@ -148,7 +148,7 @@ impl<'a> IntoIterator for Tree<'a> {
 
 pub struct TreeIterator<'a> {
     path: PathBuf,
-    stack: Vec<std::collections::hash_map::IntoIter<OsString, TreeNode<'a>>>,
+    stack: Vec<std::collections::btree_map::IntoIter<OsString, TreeNode<'a>>>,
 }
 
 impl<'a> TreeIterator<'a> {

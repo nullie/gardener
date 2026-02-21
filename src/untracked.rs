@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     ffi::OsString,
     fs,
     os::unix::fs::FileTypeExt,
@@ -45,7 +45,7 @@ pub fn check_untracked() -> eyre::Result<()> {
 
 fn visit_dirs(
     dir: &Path,
-    tree_directory: &HashMap<OsString, TreeNode>,
+    tree_directory: &BTreeMap<OsString, TreeNode>,
     unknown_dirs: &mut Vec<PathBuf>,
     unknown_files: &mut Vec<PathBuf>,
 ) -> eyre::Result<()> {
