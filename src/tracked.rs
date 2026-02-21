@@ -1,6 +1,6 @@
 use std::{borrow::Cow, fs::Metadata, path::Path};
 
-use time::OffsetDateTime;
+use time::{Duration, UtcDateTime};
 
 use crate::{
     config::{Config, EntryType},
@@ -15,10 +15,9 @@ pub fn check_tracked() -> eyre::Result<()> {
     config.add_to_tree(&mut tree)?;
 
     for (path, entry_type) in tree {
-        dbg!(&path);
         let err_message = match path.symlink_metadata() {
             Ok(metadata) => (match entry_type {
-                EntryType::Directory => check_directory(&metadata),
+                EntryType::Directory => check_directory(&path, &metadata),
                 EntryType::File => check_file(&metadata),
                 EntryType::Symlink => check_symlink(&metadata),
             })
@@ -34,14 +33,17 @@ pub fn check_tracked() -> eyre::Result<()> {
     Ok(())
 }
 
-fn check_directory(metadata: &Metadata) -> Option<&'static str> {
+fn check_directory(path: &Path, metadata: &Metadata) -> Option<&'static str> {
     if !metadata.is_dir() {
         return Some("not a directory");
     }
 
     let atime = metadata.accessed().unwrap();
+    let age = UtcDateTime::now() - UtcDateTime::from(atime);
 
-    println!("{}", OffsetDateTime::from(atime));
+    if age > Duration::days(60) {
+        println!("{}: {}", path.to_string_lossy(), age.whole_days());
+    }
 
     None
 }
