@@ -47,8 +47,6 @@ pub struct DataConfig {
 #[derive(Deserialize, Debug, Default)]
 pub struct Paths {
     #[serde(default, deserialize_with = "deserialize_null_default")]
-    pub intermediate: Vec<PathBuf>,
-    #[serde(default, deserialize_with = "deserialize_null_default")]
     pub directories: Vec<PathBuf>,
     #[serde(default, deserialize_with = "deserialize_null_default")]
     pub files: Vec<PathBuf>,
@@ -117,9 +115,6 @@ fn add_paths_to_tree<'a>(
     root: &Path,
     tree: &mut Tree<'a>,
 ) -> eyre::Result<()> {
-    for directory in &paths.intermediate {
-        tree.add_directory_path(owner, &root.join(directory))?;
-    }
     for directory in &paths.directories {
         tree.add_entry_path(owner, &root.join(directory), EntryType::Directory)?;
     }
