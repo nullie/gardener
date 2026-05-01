@@ -4,13 +4,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::config::{EntryType, Owner};
+use crate::config::{EntryType, OwnerModule};
 use eyre::Context;
 use thiserror::Error;
 
 #[derive(Debug)]
 pub enum TreeNode<'a> {
-    Entry(Owner<'a>, EntryType),
+    Entry(OwnerModule<'a>, EntryType),
     Directory(BTreeMap<OsString, TreeNode<'a>>),
 }
 
@@ -42,14 +42,14 @@ impl<'a> Tree<'a> {
         Ok(intermediate)
     }
 
-    pub fn add_directory_path(&mut self, owner: Owner, path: &Path) -> eyre::Result<()> {
+    pub fn add_directory_path(&mut self, owner: OwnerModule, path: &Path) -> eyre::Result<()> {
         self.add_directory(owner, Self::path_to_components(path)?)
             .wrap_err_with(|| format!("path: {path:?}"))
     }
 
     pub fn add_entry_path(
         &mut self,
-        owner: Owner<'a>,
+        owner: OwnerModule<'a>,
         path: &Path,
         entry: EntryType,
     ) -> eyre::Result<()> {
@@ -59,7 +59,7 @@ impl<'a> Tree<'a> {
 
     fn add_directory(
         &mut self,
-        owner: Owner,
+        owner: OwnerModule,
         components: impl IntoIterator<Item = OsString>,
     ) -> Result<(), TreeError> {
         let mut directory = &mut self.root;
@@ -82,7 +82,7 @@ impl<'a> Tree<'a> {
 
     fn add_entry(
         &mut self,
-        owner: Owner<'a>,
+        owner: OwnerModule<'a>,
         mut components: impl DoubleEndedIterator<Item = OsString>,
         entry: EntryType,
     ) -> Result<(), TreeError> {

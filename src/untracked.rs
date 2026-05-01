@@ -8,7 +8,7 @@ use std::{
 
 use systemd_tmpfiles::Directive;
 
-use crate::config::{Config, EntryType, Owner};
+use crate::config::{Config, EntryType, OwnerModule};
 use crate::tree::{Tree, TreeNode};
 
 pub fn check_untracked() -> eyre::Result<()> {
@@ -129,7 +129,9 @@ fn visit_dirs(
 }
 
 fn add_systemd_tmpfiles(tree: &mut Tree) -> eyre::Result<()> {
-    let owner = Owner::Module("systemd-tmpfiles");
+    let owner = OwnerModule::AdhocSystem {
+        name: "systemd-tmpfiles",
+    };
     let output = std::process::Command::new("systemd-tmpfiles")
         .arg("--cat-config")
         .output()?;

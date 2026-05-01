@@ -58,9 +58,23 @@ pub struct Paths {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum Owner<'a> {
-    User(&'a str),
-    Module(&'a str),
+pub enum OwnerModule<'a> {
+    AdhocSystem {
+        name: &'a str,
+    },
+    AdhocUser {
+        name: &'a str,
+        user: &'a str,
+    },
+    System {
+        name: &'a str,
+        enabled: bool,
+    },
+    User {
+        name: &'a str,
+        user: &'a str,
+        enabled: bool,
+    },
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -83,24 +97,37 @@ impl Config {
             let home_dir = Path::new(&user_config.home);
 
             for (name, module) in &user_config.adhoc {
-                add_module_to_tree(module, Owner::Module(name), home_dir, tree)?;
+                add_module_to_tree(
+                    module,
+                    OwnerModule::AdhocUser {
+                        name,
+                        user: user_name,
+                    },
+                    home_dir,
+                    tree,
+                )?;
             }
 
             for (name, &enabled) in &user_config.modules {
-                if enabled {
-                    let module = self.available_modules.user.get(name).unwrap();
-                    add_module_to_tree(module, Owner::Module(name), home_dir, tree)?;
-                }
+                let module = self.available_modules.user.get(name).unwrap();
+                add_module_to_tree(
+                    module,
+                    OwnerModule::User {
+                        name,
+                        user: user_name,
+                        enabled,
+                    },
+                    home_dir,
+                    tree,
+                )?;
             }
         }
 
         let root = Path::new("/");
 
         for (name, &enabled) in &self.enabled_modules {
-            if enabled {
-                let module = self.available_modules.system.get(name).unwrap();
-                add_module_to_tree(module, Owner::Module(name), root, tree)?;
-            }
+            let module = self.available_modules.system.get(name).unwrap();
+            add_module_to_tree(module, OwnerModule::System { name, enabled }, root, tree)?;
         }
 
         Ok(())
@@ -109,7 +136,7 @@ impl Config {
 
 fn add_module_to_tree<'a>(
     module: &Module,
-    owner: Owner<'a>,
+    owner: OwnerModule<'a>,
     root: &Path,
     tree: &mut Tree<'a>,
 ) -> eyre::Result<()> {
@@ -122,7 +149,7 @@ fn add_module_to_tree<'a>(
 
 fn add_paths_to_tree<'a>(
     paths: &Paths,
-    owner: Owner<'a>,
+    owner: OwnerModule<'a>,
     root: &Path,
     tree: &mut Tree<'a>,
 ) -> eyre::Result<()> {
