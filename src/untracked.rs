@@ -1,8 +1,7 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     ffi::OsString,
     fs,
-    os::unix::fs::FileTypeExt,
     path::{Path, PathBuf},
 };
 
