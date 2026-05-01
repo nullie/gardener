@@ -43,6 +43,16 @@ pub fn check_untracked() -> eyre::Result<()> {
     Ok(())
 }
 
+struct SystemReport {
+    untracked: Vec<Entry>,
+    tracked_by_disabled_module: BTreeMap<String, Entry>,
+}
+
+struct Entry {
+    path: PathBuf,
+    type_: EntryType,
+}
+
 fn visit_dirs(
     dir: &Path,
     tree_directory: &BTreeMap<OsString, TreeNode>,
@@ -54,68 +64,33 @@ fn visit_dirs(
             for entry in entries {
                 let entry = entry?;
                 let path = entry.path();
-                let file_type = entry.file_type()?;
+                let file_type = FileType::new(entry.file_type()?);
                 let tree_entry = tree_directory.get(entry.file_name().as_os_str());
 
-                match tree_entry {
-                    Some(TreeNode::Directory(entry_tree_directory)) if file_type.is_dir() => {
+                match (tree_entry, file_type) {
+                    (Some(TreeNode::Directory(entry_tree_directory)), FileType::Directory) => {
                         visit_dirs(&path, entry_tree_directory, unknown_dirs, unknown_files)?;
                     }
-                    None => {
-                        if file_type.is_dir() {
-                            unknown_dirs.push(path);
-                        } else {
-                            unknown_files.push(path);
-                        };
+                    (None, FileType::Directory) => {
+                        unknown_dirs.push(path);
                     }
-                    Some(TreeNode::Entry(owner, expected_entry)) => {
-                        let found_entry = if file_type.is_dir() {
-                            EntryType::Directory
-                        } else if file_type.is_file()
-                            || file_type.is_fifo()
-                            || file_type.is_socket()
-                            || file_type.is_char_device()
-                            || file_type.is_block_device()
-                        {
-                            EntryType::File
-                        } else if file_type.is_symlink() {
-                            EntryType::Symlink
-                        } else {
-                            panic!("Unknown file type: {file_type:?}")
-                        };
-
-                        if &found_entry != expected_entry {
-                            eprintln!(
-                                "{path:?} expected {expected_entry:?}, found {found_entry:?}"
-                            );
-                        }
+                    (None, _) => {
+                        unknown_files.push(path);
                     }
-                    Some(tree_entry) => {
-                        let found = if file_type.is_dir() {
-                            "directory"
-                        } else if file_type.is_symlink() {
-                            "symlink"
-                        } else if file_type.is_file() {
-                            "file"
-                        } else if file_type.is_fifo()
-                            || file_type.is_socket()
-                            || file_type.is_char_device()
-                            || file_type.is_block_device()
-                        {
-                            "special file"
-                        } else {
-                            "unknown file"
-                        };
-
+                    (Some(tree_entry), found) => {
                         let expected = match tree_entry {
                             TreeNode::Directory(_) | TreeNode::Entry(_, EntryType::Directory) => {
-                                "directory"
+                                FileType::Directory
                             }
-                            TreeNode::Entry(_, EntryType::Symlink) => "symlink",
-                            TreeNode::Entry(_, EntryType::File) => "file",
+                            TreeNode::Entry(_, EntryType::Symlink) => FileType::Symlink,
+                            TreeNode::Entry(_, EntryType::File) => FileType::File,
                         };
 
-                        eprintln!("{path:?}: unexpected entry, expected {expected}, found {found}");
+                        if expected != found {
+                            eprintln!(
+                                "{path:?}: unexpected entry, expected {expected:?}, found {found:?}"
+                            );
+                        }
                     }
                 }
             }
@@ -126,6 +101,28 @@ fn visit_dirs(
     }
 
     Ok(())
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum FileType {
+    Directory,
+    Symlink,
+    File,
+    EphemeralFile(fs::FileType),
+}
+
+impl FileType {
+    fn new(file_type: fs::FileType) -> Self {
+        if file_type.is_dir() {
+            FileType::Directory
+        } else if file_type.is_symlink() {
+            FileType::Symlink
+        } else if file_type.is_file() {
+            FileType::File
+        } else {
+            FileType::EphemeralFile(file_type)
+        }
+    }
 }
 
 fn add_systemd_tmpfiles(tree: &mut Tree) -> eyre::Result<()> {
