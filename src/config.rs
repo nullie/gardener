@@ -20,22 +20,28 @@ where
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
-    #[serde(default)]
-    pub modules: BTreeMap<String, Module>,
-    #[serde(default)]
-    pub users: BTreeMap<String, DataConfig>,
+    pub available_modules: AvailableModules,
+    pub enabled_modules: EnabledModules,
+    pub users: BTreeMap<String, UserConfig>,
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug)]
+pub struct AvailableModules {
+    pub user: BTreeMap<String, Module>,
+    pub system: BTreeMap<String, Module>,
+}
+
+type EnabledModules = BTreeMap<String, bool>;
+
+#[derive(Deserialize, Debug)]
+pub struct UserConfig {
+    pub adhoc: BTreeMap<String, Module>,
+    pub home: String,
+    pub modules: EnabledModules,
+}
+
+#[derive(Deserialize, Debug)]
 pub struct Module {
-    #[serde(default, deserialize_with = "deserialize_null_default")]
-    pub user: DataConfig,
-    #[serde(default, deserialize_with = "deserialize_null_default")]
-    pub system: DataConfig,
-}
-
-#[derive(Deserialize, Debug, Default)]
-pub struct DataConfig {
     #[serde(default, deserialize_with = "deserialize_null_default")]
     pub cache: Paths,
     #[serde(default, deserialize_with = "deserialize_null_default")]
@@ -46,11 +52,8 @@ pub struct DataConfig {
 
 #[derive(Deserialize, Debug, Default)]
 pub struct Paths {
-    #[serde(default, deserialize_with = "deserialize_null_default")]
     pub directories: Vec<PathBuf>,
-    #[serde(default, deserialize_with = "deserialize_null_default")]
     pub files: Vec<PathBuf>,
-    #[serde(default, deserialize_with = "deserialize_null_default")]
     pub symlinks: Vec<PathBuf>,
 }
 
@@ -76,35 +79,43 @@ impl Config {
     }
 
     pub fn add_to_tree<'a>(&'a self, tree: &mut Tree<'a>) -> eyre::Result<()> {
-        for (user, data_config) in &self.users {
-            let home_dir = Path::new("/home").join(user);
+        for (user_name, user_config) in &self.users {
+            let home_dir = Path::new(&user_config.home);
 
-            add_data_config_to_tree(data_config, Owner::User(user), &home_dir, tree)?;
+            for (name, module) in &user_config.adhoc {
+                add_module_to_tree(module, Owner::Module(name), home_dir, tree)?;
+            }
 
-            for (name, module) in &self.modules {
-                add_data_config_to_tree(&module.user, Owner::Module(name), &home_dir, tree)?;
+            for (name, &enabled) in &user_config.modules {
+                if enabled {
+                    let module = self.available_modules.user.get(name).unwrap();
+                    add_module_to_tree(module, Owner::Module(name), home_dir, tree)?;
+                }
             }
         }
 
         let root = Path::new("/");
 
-        for (name, module) in &self.modules {
-            add_data_config_to_tree(&module.system, Owner::Module(name), root, tree)?;
+        for (name, &enabled) in &self.enabled_modules {
+            if enabled {
+                let module = self.available_modules.system.get(name).unwrap();
+                add_module_to_tree(module, Owner::Module(name), root, tree)?;
+            }
         }
 
         Ok(())
     }
 }
 
-fn add_data_config_to_tree<'a>(
-    data_config: &DataConfig,
+fn add_module_to_tree<'a>(
+    module: &Module,
     owner: Owner<'a>,
     root: &Path,
     tree: &mut Tree<'a>,
 ) -> eyre::Result<()> {
-    add_paths_to_tree(&data_config.cache, owner, root, tree)?;
-    add_paths_to_tree(&data_config.data, owner, root, tree)?;
-    add_paths_to_tree(&data_config.ephemeral, owner, root, tree)?;
+    add_paths_to_tree(&module.cache, owner, root, tree)?;
+    add_paths_to_tree(&module.data, owner, root, tree)?;
+    add_paths_to_tree(&module.ephemeral, owner, root, tree)?;
 
     Ok(())
 }
