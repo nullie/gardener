@@ -20,23 +20,20 @@ pub fn check_untracked() -> eyre::Result<()> {
 
     config.add_to_tree(&mut tree)?;
 
-    let mut unknown_dirs = Vec::new();
-    let mut unknown_files = Vec::new();
+    let mut visitor = SimpleVisitor {
+        unknown_dirs: Vec::new(),
+        unknown_files: Vec::new(),
+    };
 
-    visit_dirs(
-        Path::new("/"),
-        &tree.root,
-        &mut unknown_dirs,
-        &mut unknown_files,
-    )?;
+    visit_dirs(Path::new("/"), &tree.root, &mut visitor)?;
 
     println!("Unknown dirs:");
-    for dir in unknown_dirs {
+    for dir in visitor.unknown_dirs {
         println!("{dir:?}");
     }
 
     println!("Unknown files:");
-    for file in unknown_files {
+    for file in visitor.unknown_files {
         println!("{file:?}");
     }
 
@@ -50,14 +47,41 @@ struct SystemReport {
 
 struct Entry {
     path: PathBuf,
-    type_: EntryType,
+    file_type: FileType,
+}
+
+trait Visitor {
+    fn visit_unknown_entry(&mut self, path: PathBuf, file_type: FileType);
+    fn visit_mismatching_entry(&mut self, path: PathBuf, expected: FileType, found: FileType);
+    fn visit_error(&mut self, dir: PathBuf, e: std::io::Error);
+}
+
+struct SimpleVisitor {
+    unknown_dirs: Vec<PathBuf>,
+    unknown_files: Vec<PathBuf>,
+}
+
+impl Visitor for SimpleVisitor {
+    fn visit_unknown_entry(&mut self, path: PathBuf, file_type: FileType) {
+        match file_type {
+            FileType::Directory => self.unknown_dirs.push(path),
+            _ => self.unknown_files.push(path),
+        }
+    }
+
+    fn visit_mismatching_entry(&mut self, path: PathBuf, expected: FileType, found: FileType) {
+        eprintln!("{path:?}: unexpected entry, expected {expected:?}, found {found:?}");
+    }
+
+    fn visit_error(&mut self, dir: PathBuf, e: std::io::Error) {
+        eprintln!("Failed to read directory {:?}: {}", dir, e);
+    }
 }
 
 fn visit_dirs(
     dir: &Path,
     tree_directory: &BTreeMap<OsString, TreeNode>,
-    unknown_dirs: &mut Vec<PathBuf>,
-    unknown_files: &mut Vec<PathBuf>,
+    visitor: &mut impl Visitor,
 ) -> eyre::Result<()> {
     match fs::read_dir(dir) {
         Ok(entries) => {
@@ -69,13 +93,10 @@ fn visit_dirs(
 
                 match (tree_entry, file_type) {
                     (Some(TreeNode::Directory(entry_tree_directory)), FileType::Directory) => {
-                        visit_dirs(&path, entry_tree_directory, unknown_dirs, unknown_files)?;
+                        visit_dirs(&path, entry_tree_directory, visitor)?;
                     }
-                    (None, FileType::Directory) => {
-                        unknown_dirs.push(path);
-                    }
-                    (None, _) => {
-                        unknown_files.push(path);
+                    (None, file_type) => {
+                        visitor.visit_unknown_entry(path, file_type);
                     }
                     (Some(tree_entry), found) => {
                         let expected = match tree_entry {
@@ -87,16 +108,14 @@ fn visit_dirs(
                         };
 
                         if expected != found {
-                            eprintln!(
-                                "{path:?}: unexpected entry, expected {expected:?}, found {found:?}"
-                            );
+                            visitor.visit_mismatching_entry(path, expected, found);
                         }
                     }
                 }
             }
         }
         Err(e) => {
-            eprintln!("Failed to read directory {:?}: {}", dir, e)
+            visitor.visit_error(dir.to_owned(), e);
         }
     }
 
