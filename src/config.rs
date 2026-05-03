@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::tree::Tree;
+use crate::declarative::{DeclaredFileType, DeclaredPathType, PathType, tree::Tree};
 
 use serde::{Deserialize, Deserializer};
 
@@ -77,13 +77,6 @@ pub enum OwnerModule<'a> {
     },
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub enum EntryType {
-    File,
-    Symlink,
-    Directory,
-}
-
 impl Config {
     pub fn load() -> eyre::Result<Self> {
         let input = std::fs::File::open("/etc/gardener.json")?;
@@ -154,13 +147,25 @@ fn add_paths_to_tree<'a>(
     tree: &mut Tree<'a>,
 ) -> eyre::Result<()> {
     for directory in &paths.directories {
-        tree.add_entry_path(owner, &root.join(directory), EntryType::Directory)?;
+        tree.add_path(
+            owner,
+            &root.join(directory),
+            DeclaredPathType::ClosedDirectory,
+        )?;
     }
     for file in &paths.files {
-        tree.add_entry_path(owner, &root.join(file), EntryType::File)?;
+        tree.add_path(
+            owner,
+            &root.join(file),
+            DeclaredPathType::File(DeclaredFileType::Regular),
+        )?;
     }
     for symlink in &paths.symlinks {
-        tree.add_entry_path(owner, &root.join(symlink), EntryType::Symlink)?;
+        tree.add_path(
+            owner,
+            &root.join(symlink),
+            DeclaredPathType::File(DeclaredFileType::Symlink),
+        )?;
     }
 
     Ok(())

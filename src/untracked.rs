@@ -7,8 +7,14 @@ use std::{
 
 use systemd_tmpfiles::Directive;
 
-use crate::config::{Config, EntryType, OwnerModule};
-use crate::tree::{Tree, TreeNode};
+use crate::declarative::{
+    DeclaredPathType, PathType,
+    tree::{ClosedNodeType, Node, Tree},
+};
+use crate::{
+    config::{Config, OwnerModule},
+    declarative::DeclaredFileType,
+};
 
 pub fn check_untracked() -> eyre::Result<()> {
     let config = Config::load()?;
@@ -79,7 +85,7 @@ impl Visitor for SimpleVisitor {
 
 fn visit_dirs(
     dir: &Path,
-    tree_directory: &BTreeMap<OsString, TreeNode>,
+    tree_directory: &BTreeMap<OsString, Node>,
     visitor: &mut impl Visitor,
 ) -> eyre::Result<()> {
     match fs::read_dir(dir) {
@@ -88,26 +94,26 @@ fn visit_dirs(
                 let entry = entry?;
                 let path = entry.path();
                 let file_type = FileType::new(entry.file_type()?);
-                let tree_entry = tree_directory.get(entry.file_name().as_os_str());
+                let maybe_tree_node = tree_directory.get(entry.file_name().as_os_str());
 
-                match (tree_entry, file_type) {
-                    (Some(TreeNode::Directory(entry_tree_directory)), FileType::Directory) => {
-                        visit_dirs(&path, entry_tree_directory, visitor)?;
+                match (maybe_tree_node, file_type) {
+                    (Some(Node::Open(owner, children)), FileType::Directory) => {
+                        visit_dirs(&path, children, visitor)?;
                     }
                     (None, file_type) => {
                         visitor.visit_unknown_entry(path, file_type);
                     }
-                    (Some(tree_entry), found) => {
-                        let expected = match tree_entry {
-                            TreeNode::Directory(_) | TreeNode::Entry(_, EntryType::Directory) => {
-                                FileType::Directory
+                    (Some(tree_node), file_type) => {
+                        let expected = match tree_node {
+                            Node::Open(_, _) => FileType::Directory,
+                            Node::Closed(_, ClosedNodeType::ClosedDirectory) => FileType::Directory,
+                            Node::Closed(_, ClosedNodeType::File(declared_file_type)) => {
+                                FileType::File(*declared_file_type)
                             }
-                            TreeNode::Entry(_, EntryType::Symlink) => FileType::Symlink,
-                            TreeNode::Entry(_, EntryType::File) => FileType::File,
                         };
 
-                        if expected != found {
-                            visitor.visit_mismatching_entry(path, expected, found);
+                        if expected != file_type {
+                            visitor.visit_mismatching_entry(path, expected, file_type);
                         }
                     }
                 }
@@ -124,21 +130,20 @@ fn visit_dirs(
 #[derive(Debug, PartialEq, Eq)]
 enum FileType {
     Directory,
-    Symlink,
-    File,
-    EphemeralFile(fs::FileType),
+    File(DeclaredFileType),
+    Other(fs::FileType),
 }
 
 impl FileType {
     fn new(file_type: fs::FileType) -> Self {
         if file_type.is_dir() {
             FileType::Directory
-        } else if file_type.is_symlink() {
-            FileType::Symlink
         } else if file_type.is_file() {
-            FileType::File
+            FileType::File(DeclaredFileType::Regular)
+        } else if file_type.is_symlink() {
+            FileType::File(DeclaredFileType::Symlink)
         } else {
-            FileType::EphemeralFile(file_type)
+            FileType::Other(file_type)
         }
     }
 }
@@ -159,26 +164,33 @@ fn add_systemd_tmpfiles(tree: &mut Tree) -> eyre::Result<()> {
     let parsed = systemd_tmpfiles::parser::parse_str(&output)?;
 
     for entry in parsed {
-        match entry.directive() {
+        let maybe_entry_type = match entry.directive() {
             Directive::CreateSymlink { .. } => {
-                tree.add_entry_path(owner, Path::new(entry.path()), EntryType::Symlink)?;
-                assert!(!entry.path_is_glob());
+                Some(DeclaredPathType::File(DeclaredFileType::Symlink))
             }
-            Directive::CreateFile { .. }
-            | Directive::CreateFifo { .. }
-            | Directive::CreateCharDeviceNode { .. }
-            | Directive::CreateBlockDeviceNode { .. }
-            | Directive::WriteToFile { .. } => {
-                // FIXME: return error
-                assert!(!entry.path_is_glob());
-                tree.add_entry_path(owner, Path::new(entry.path()), EntryType::File)?;
+            Directive::CreateFile { .. } | Directive::WriteToFile { .. } => {
+                Some(DeclaredPathType::File(DeclaredFileType::Regular))
+            }
+            Directive::CreateFifo { .. } => Some(DeclaredPathType::File(DeclaredFileType::Fifo)),
+            Directive::CreateCharDeviceNode { .. } => {
+                Some(DeclaredPathType::File(DeclaredFileType::CharDevice))
+            }
+            Directive::CreateBlockDeviceNode { .. } => {
+                Some(DeclaredPathType::File(DeclaredFileType::BlockDevice))
             }
             Directive::CreateDirectory { .. } | Directive::CreateSubvolume { .. } => {
-                // FIXME: return error
-                assert!(!entry.path_is_glob());
-                tree.add_directory_path(owner, Path::new(entry.path()))?;
+                Some(DeclaredPathType::OpenDirectory)
             }
-            _ => (),
+            _ => None,
+        };
+
+        if let Some(entry_type) = maybe_entry_type {
+            dbg!(entry.path(), &entry_type);
+            //
+            // FIXME: return error
+            assert!(!entry.path_is_glob());
+
+            tree.add_path(owner, Path::new(entry.path()), entry_type)?;
         }
     }
 
