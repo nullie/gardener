@@ -1,8 +1,4 @@
-use std::{
-    collections::BTreeMap,
-    ffi::OsString,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeMap, ffi::OsString, path::Path};
 
 use crate::declarative::DeclaredFileType;
 use crate::{config::OwnerModule, declarative::DeclaredPathType};
@@ -153,65 +149,4 @@ enum TreeError {
     OverlappingPath,
     #[error("unexpected component")]
     UnexpectedPathComponent(String),
-}
-
-impl<'a> IntoIterator for Tree<'a> {
-    type Item = (PathBuf, DeclaredPathType);
-
-    type IntoIter = TreeIterator<'a>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        TreeIterator::new(self)
-    }
-}
-
-pub struct TreeIterator<'a> {
-    path: PathBuf,
-    stack: Vec<std::collections::btree_map::IntoIter<OsString, Node<'a>>>,
-}
-
-impl<'a> TreeIterator<'a> {
-    fn new(tree: Tree<'a>) -> Self {
-        Self {
-            path: PathBuf::from("/"),
-            stack: vec![tree.root.into_iter()],
-        }
-    }
-}
-
-impl<'a> Iterator for TreeIterator<'a> {
-    type Item = (PathBuf, DeclaredPathType);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        while let Some(top) = self.stack.last_mut() {
-            if let Some((name, item)) = top.next() {
-                match item {
-                    Node::Closed(_owner, closed_node_type) => {
-                        let declared_path_type = match closed_node_type {
-                            ClosedNodeType::ClosedDirectory => DeclaredPathType::ClosedDirectory,
-                            ClosedNodeType::File(declared_file_type) => {
-                                DeclaredPathType::File(declared_file_type)
-                            }
-                        };
-                        return Some((self.path.join(name), declared_path_type));
-                    }
-                    Node::Open(maybe_owner, children) => {
-                        self.path.push(&name);
-                        self.stack.push(children.into_iter());
-
-                        if let Some(_owner) = maybe_owner {
-                            return Some((self.path.join(name), DeclaredPathType::OpenDirectory));
-                        }
-                    }
-                }
-            } else {
-                self.stack.pop().unwrap();
-                if !self.stack.is_empty() {
-                    assert!(self.path.pop());
-                }
-            }
-        }
-
-        None
-    }
 }
