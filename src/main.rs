@@ -19,6 +19,7 @@ enum Command {
 #[derive(Subcommand, Clone)]
 enum CheckUntrackedSubCommand {
     SuggestConfig,
+    Plain,
 }
 
 fn main() -> eyre::Result<()> {
@@ -29,6 +30,9 @@ fn main() -> eyre::Result<()> {
         Command::CheckUntracked {
             opt_command: Some(CheckUntrackedSubCommand::SuggestConfig),
         } => gardener::untracked::suggest_config(),
+        Command::CheckUntracked {
+            opt_command: Some(CheckUntrackedSubCommand::Plain),
+        } => gardener::untracked::print_untracked(),
         Command::CheckTracked => gardener::tracked::check_tracked(),
     }
 }

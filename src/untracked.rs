@@ -52,6 +52,24 @@ pub fn suggest_config() -> eyre::Result<()> {
     Ok(())
 }
 
+pub fn print_untracked() -> eyre::Result<()> {
+    let config = Config::load()?;
+
+    let mut tree = Tree::new();
+
+    add_systemd_tmpfiles(&mut tree)?;
+
+    config.add_to_tree(&mut tree)?;
+
+    let mut visitor = SimpleVisitor::default();
+
+    visit_dirs(Path::new("/"), &tree.root, &mut visitor)?;
+
+    visitor.print_untracked();
+
+    Ok(())
+}
+
 struct UntrackedPath {
     path: PathBuf,
     file_type: FileType,
@@ -99,6 +117,18 @@ struct SimpleVisitor<'a> {
 }
 
 impl SimpleVisitor<'_> {
+    fn print_untracked(&self) {
+        for untracked_path in &self.untracked {
+            println!("{}", untracked_path.path.display());
+        }
+
+        for tracked_paths in self.tracked_by_disabled_module.values() {
+            for tracked_path in tracked_paths {
+                println!("{}", tracked_path.path.display());
+            }
+        }
+    }
+
     fn print_report(&self) {
         println!("Untracked paths:");
 
