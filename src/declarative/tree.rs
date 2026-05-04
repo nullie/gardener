@@ -198,7 +198,7 @@ impl<'a> Iterator for TreeIterator<'a> {
                         self.path.push(&name);
                         self.stack.push(children.into_iter());
 
-                        if let Some(owner) = maybe_owner {
+                        if let Some(_owner) = maybe_owner {
                             return Some((self.path.join(name), DeclaredPathType::OpenDirectory));
                         }
                     }

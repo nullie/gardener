@@ -97,87 +97,76 @@ impl Config {
     }
 
     pub fn add_to_tree<'a>(&'a self, tree: &mut Tree<'a>) -> eyre::Result<()> {
-        for (user_name, user_config) in &self.users {
-            let home_dir = Path::new(&user_config.home);
-
-            for (name, module) in &user_config.adhoc {
-                add_module_to_tree(
-                    module,
-                    OwnerModule::AdhocUser {
-                        name,
-                        user: user_name,
-                    },
-                    home_dir,
-                    tree,
-                )?;
-            }
-
-            for (name, &enabled) in &user_config.modules {
-                let module = self.available_modules.user.get(name).unwrap();
-                add_module_to_tree(
-                    module,
-                    OwnerModule::User {
-                        name,
-                        user: user_name,
-                        enabled,
-                    },
-                    home_dir,
-                    tree,
-                )?;
-            }
-        }
-
-        let root = Path::new("/");
-
-        for (name, &enabled) in &self.enabled_modules {
-            let module = self.available_modules.system.get(name).unwrap();
-            add_module_to_tree(module, OwnerModule::System { name, enabled }, root, tree)?;
+        for (owner, path, path_type) in self.paths() {
+            tree.add_path(owner, &path, path_type)?;
         }
 
         Ok(())
     }
-}
 
-fn add_module_to_tree<'a>(
-    module: &Module,
-    owner: OwnerModule<'a>,
-    root: &Path,
-    tree: &mut Tree<'a>,
-) -> eyre::Result<()> {
-    add_paths_to_tree(&module.cache, owner, root, tree)?;
-    add_paths_to_tree(&module.data, owner, root, tree)?;
-    add_paths_to_tree(&module.ephemeral, owner, root, tree)?;
+    fn paths(&self) -> impl Iterator<Item = (OwnerModule<'_>, PathBuf, DeclaredPathType)> {
+        let user_paths = self.users.iter().flat_map(|(user_name, user_config)| {
+            let home_dir = Path::new(&user_config.home);
 
-    Ok(())
-}
+            let adhoc_paths = user_config.adhoc.iter().flat_map(|(name, module)| {
+                let owner_module = OwnerModule::AdhocUser {
+                    name,
+                    user: user_name,
+                };
 
-fn add_paths_to_tree<'a>(
-    paths: &Paths,
-    owner: OwnerModule<'a>,
-    root: &Path,
-    tree: &mut Tree<'a>,
-) -> eyre::Result<()> {
-    for directory in &paths.directories {
-        tree.add_path(
-            owner,
-            &root.join(directory),
-            DeclaredPathType::ClosedDirectory,
-        )?;
+                module_to_paths(module)
+                    .map(move |(path, file_type)| (owner_module, path, file_type))
+            });
+
+            let paths = user_config.modules.iter().flat_map(|(name, &enabled)| {
+                let module = self.available_modules.user.get(name).unwrap();
+                let owner_module = OwnerModule::User {
+                    name,
+                    user: user_name,
+                    enabled,
+                };
+
+                module_to_paths(module)
+                    .map(move |(path, file_type)| (owner_module, path, file_type))
+            });
+
+            adhoc_paths
+                .chain(paths)
+                .map(|(owner_module, path, file_type)| {
+                    (owner_module, home_dir.join(path), file_type)
+                })
+        });
+
+        let system_paths = self.enabled_modules.iter().flat_map(|(name, &enabled)| {
+            let module = self.available_modules.system.get(name).unwrap();
+            let owner_module = OwnerModule::System { name, enabled };
+
+            module_to_paths(module)
+                .map(move |(path, file_type)| (owner_module, path.to_owned(), file_type))
+        });
+
+        user_paths.chain(system_paths)
     }
-    for file in &paths.files {
-        tree.add_path(
-            owner,
-            &root.join(file),
+}
+
+fn module_to_paths(module: &Module) -> impl Iterator<Item = (&Path, DeclaredPathType)> {
+    [&module.cache, &module.data, &module.ephemeral]
+        .into_iter()
+        .flat_map(path_set_to_paths)
+}
+
+fn path_set_to_paths(path_set: &Paths) -> impl Iterator<Item = (&Path, DeclaredPathType)> {
+    [
+        (&path_set.directories, DeclaredPathType::ClosedDirectory),
+        (
+            &path_set.files,
             DeclaredPathType::File(DeclaredFileType::Regular),
-        )?;
-    }
-    for symlink in &paths.symlinks {
-        tree.add_path(
-            owner,
-            &root.join(symlink),
+        ),
+        (
+            &path_set.symlinks,
             DeclaredPathType::File(DeclaredFileType::Symlink),
-        )?;
-    }
-
-    Ok(())
+        ),
+    ]
+    .into_iter()
+    .flat_map(|(paths, path_type)| paths.iter().map(move |path| (path.as_ref(), path_type)))
 }
