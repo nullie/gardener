@@ -9,15 +9,26 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    CheckUntracked,
+    CheckUntracked {
+        #[command(subcommand)]
+        opt_command: Option<CheckUntrackedSubCommand>,
+    },
     CheckTracked,
+}
+
+#[derive(Subcommand, Clone)]
+enum CheckUntrackedSubCommand {
+    SuggestConfig,
 }
 
 fn main() -> eyre::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::CheckUntracked => gardener::untracked::check_untracked(),
+        Command::CheckUntracked { opt_command: None } => gardener::untracked::check_untracked(),
+        Command::CheckUntracked {
+            opt_command: Some(CheckUntrackedSubCommand::SuggestConfig),
+        } => gardener::untracked::suggest_config(),
         Command::CheckTracked => gardener::tracked::check_tracked(),
     }
 }

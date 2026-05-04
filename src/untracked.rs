@@ -34,6 +34,24 @@ pub fn check_untracked() -> eyre::Result<()> {
     Ok(())
 }
 
+pub fn suggest_config() -> eyre::Result<()> {
+    let config = Config::load()?;
+
+    let mut tree = Tree::new();
+
+    add_systemd_tmpfiles(&mut tree)?;
+
+    config.add_to_tree(&mut tree)?;
+
+    let mut visitor = SimpleVisitor::default();
+
+    visit_dirs(Path::new("/"), &tree.root, &mut visitor)?;
+
+    visitor.print_suggested_config();
+
+    Ok(())
+}
+
 struct UntrackedPath {
     path: PathBuf,
     file_type: FileType,
@@ -99,6 +117,58 @@ impl SimpleVisitor<'_> {
                 println!("    {}", tracked_path);
             }
         }
+    }
+
+    fn print_suggested_config(&self) {
+        let mut system_modules = Vec::new();
+        let mut user_modules: BTreeMap<&str, Vec<_>> = BTreeMap::new();
+
+        for owner in self.tracked_by_disabled_module.keys() {
+            match owner {
+                OwnerModule::System { name, enabled } => {
+                    assert!(!enabled);
+
+                    system_modules.push(name);
+                }
+                OwnerModule::User {
+                    name,
+                    user,
+                    enabled,
+                } => {
+                    assert!(!enabled);
+
+                    user_modules.entry(user).or_default().push(name);
+                }
+                _ => panic!("TODO: refactor types, adhoc modules should not be here"),
+            };
+        }
+
+        println!("gardener.config = {{");
+        println!("  enabledModules = {{");
+
+        for name in system_modules {
+            println!("    {name} = true;")
+        }
+
+        println!("  }};");
+
+        println!("  users = {{");
+
+        for (user, modules) in user_modules {
+            println!("    {user} = {{");
+            println!("      modules = {{");
+
+            for module in modules {
+                println!("        {module} = true;");
+            }
+
+            println!("      }};");
+            println!("    }};");
+        }
+
+        println!("  }};");
+
+        println!("}};");
     }
 }
 
