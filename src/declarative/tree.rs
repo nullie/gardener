@@ -88,7 +88,7 @@ impl<'a> Tree<'a> {
 
         for component in components {
             let entry = directory
-                .entry(dbg!(component))
+                .entry(component)
                 .or_insert_with(|| Node::Open(None, BTreeMap::new()));
 
             match entry {
@@ -115,7 +115,7 @@ impl<'a> Tree<'a> {
                 });
             }
             std::collections::btree_map::Entry::Occupied(occupied) => {
-                let occupied = dbg!(occupied).into_mut();
+                let occupied = occupied.into_mut();
 
                 match (occupied, path_type) {
                     (Node::Open(maybe_owner @ None, _), DeclaredPathType::OpenDirectory) => {

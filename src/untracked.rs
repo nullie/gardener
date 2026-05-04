@@ -318,8 +318,6 @@ fn add_systemd_tmpfiles(tree: &mut Tree) -> eyre::Result<()> {
         };
 
         if let Some(entry_type) = maybe_entry_type {
-            dbg!(entry.path(), &entry_type);
-            //
             // FIXME: return error
             assert!(!entry.path_is_glob());
 
