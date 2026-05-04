@@ -104,7 +104,7 @@ impl Config {
         Ok(())
     }
 
-    fn paths(&self) -> impl Iterator<Item = (OwnerModule<'_>, PathBuf, DeclaredPathType)> {
+    pub fn paths(&self) -> impl Iterator<Item = (OwnerModule<'_>, PathBuf, DeclaredPathType)> {
         let user_paths = self.users.iter().flat_map(|(user_name, user_config)| {
             let home_dir = Path::new(&user_config.home);
 

@@ -2,19 +2,19 @@ use std::borrow::Cow;
 
 use crate::{
     config::Config,
-    declarative::{DeclaredFileType, DeclaredPathType, tree::Tree},
+    declarative::{DeclaredFileType, DeclaredPathType},
 };
 
 pub fn check_tracked() -> eyre::Result<()> {
     let config = Config::load()?;
 
-    let mut tree = Tree::new();
+    for (owner, path, path_type) in config.paths() {
+        if !owner.enabled() {
+            continue;
+        }
 
-    config.add_to_tree(&mut tree)?;
-
-    for (path, entry_type) in tree {
         let err_message = match path.symlink_metadata() {
-            Ok(metadata) => (match entry_type {
+            Ok(metadata) => (match path_type {
                 DeclaredPathType::OpenDirectory | DeclaredPathType::ClosedDirectory => {
                     (!metadata.is_dir()).then_some("not a directory")
                 }
