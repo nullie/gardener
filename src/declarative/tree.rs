@@ -40,6 +40,7 @@ pub enum ClosedNodeType {
 }
 
 impl<'a> Tree<'a> {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             root: BTreeMap::new(),
