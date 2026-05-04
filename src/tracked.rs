@@ -1,6 +1,4 @@
-use std::{borrow::Cow, fs::Metadata, path::Path};
-
-use time::{Duration, UtcDateTime};
+use std::borrow::Cow;
 
 use crate::{
     config::Config,
@@ -35,24 +33,9 @@ pub fn check_tracked() -> eyre::Result<()> {
         };
 
         if let Some(err_message) = err_message {
-            println!("{}: {}", path.to_string_lossy(), err_message);
+            println!("{}: {}", path.display(), err_message);
         }
     }
 
     Ok(())
-}
-
-fn check_directory(path: &Path, metadata: &Metadata) -> Option<&'static str> {
-    if !metadata.is_dir() {
-        return Some("not a directory");
-    }
-
-    let atime = metadata.accessed().unwrap();
-    let age = UtcDateTime::now() - UtcDateTime::from(atime);
-
-    if age > Duration::days(60) {
-        println!("{}: {}", path.to_string_lossy(), age.whole_days());
-    }
-
-    None
 }
