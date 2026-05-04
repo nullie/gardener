@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::declarative::{DeclaredFileType, DeclaredPathType, PathType, tree::Tree};
+use crate::declarative::{DeclaredFileType, DeclaredPathType, tree::Tree};
 
 use serde::{Deserialize, Deserializer};
 
@@ -75,6 +75,17 @@ pub enum OwnerModule<'a> {
         user: &'a str,
         enabled: bool,
     },
+}
+
+impl<'a> OwnerModule<'a> {
+    pub fn enabled(&self) -> bool {
+        match self {
+            OwnerModule::AdhocSystem { .. } => true,
+            OwnerModule::AdhocUser { .. } => true,
+            OwnerModule::System { enabled, .. } => *enabled,
+            OwnerModule::User { enabled, .. } => *enabled,
+        }
+    }
 }
 
 impl Config {

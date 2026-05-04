@@ -4,7 +4,7 @@ use time::{Duration, UtcDateTime};
 
 use crate::{
     config::Config,
-    declarative::{DeclaredFileType, DeclaredPathType, PathType, tree::Tree},
+    declarative::{DeclaredFileType, DeclaredPathType, tree::Tree},
 };
 
 pub fn check_tracked() -> eyre::Result<()> {

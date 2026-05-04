@@ -8,7 +8,7 @@ use std::{
 use systemd_tmpfiles::Directive;
 
 use crate::declarative::{
-    DeclaredPathType, PathType,
+    DeclaredPathType,
     tree::{ClosedNodeType, Node, Tree},
 };
 use crate::{
@@ -56,8 +56,19 @@ struct Entry {
 }
 
 trait Visitor {
-    fn visit_unknown_entry(&mut self, path: PathBuf, file_type: FileType);
-    fn visit_mismatching_entry(&mut self, path: PathBuf, expected: FileType, found: FileType);
+    fn visit_untracked_path(
+        &mut self,
+        path: PathBuf,
+        owner: Option<OwnerModule>,
+        file_type: FileType,
+    );
+    fn visit_mismatching_path(
+        &mut self,
+        path: PathBuf,
+        owner: Option<OwnerModule>,
+        expected: FileType,
+        found: FileType,
+    );
     fn visit_error(&mut self, dir: PathBuf, e: std::io::Error);
 }
 
@@ -67,15 +78,26 @@ struct SimpleVisitor {
 }
 
 impl Visitor for SimpleVisitor {
-    fn visit_unknown_entry(&mut self, path: PathBuf, file_type: FileType) {
-        match file_type {
-            FileType::Directory => self.unknown_dirs.push(path),
-            _ => self.unknown_files.push(path),
-        }
+    fn visit_untracked_path(
+        &mut self,
+        path: PathBuf,
+        owner: Option<OwnerModule>,
+        file_type: FileType,
+    ) {
+        println!("{owner:?}: {} {file_type:?}", path.display());
     }
 
-    fn visit_mismatching_entry(&mut self, path: PathBuf, expected: FileType, found: FileType) {
-        eprintln!("{path:?}: unexpected entry, expected {expected:?}, found {found:?}");
+    fn visit_mismatching_path(
+        &mut self,
+        path: PathBuf,
+        owner: Option<OwnerModule>,
+        expected: FileType,
+        found: FileType,
+    ) {
+        eprintln!(
+            "{owner:?} {}: unexpected entry, expected {expected:?}, found {found:?}",
+            path.display()
+        );
     }
 
     fn visit_error(&mut self, dir: PathBuf, e: std::io::Error) {
@@ -97,13 +119,15 @@ fn visit_dirs(
                 let maybe_tree_node = tree_directory.get(entry.file_name().as_os_str());
 
                 match (maybe_tree_node, file_type) {
-                    (Some(Node::Open(owner, children)), FileType::Directory) => {
+                    (Some(Node::Open(_maybe_owner, children)), FileType::Directory) => {
                         visit_dirs(&path, children, visitor)?;
                     }
-                    (None, file_type) => {
-                        visitor.visit_unknown_entry(path, file_type);
-                    }
                     (Some(tree_node), file_type) => {
+                        let maybe_owner = match tree_node {
+                            Node::Open(maybe_owner, _) => *maybe_owner,
+                            Node::Closed(owner, _) => Some(*owner),
+                        };
+
                         let expected = match tree_node {
                             Node::Open(_, _) => FileType::Directory,
                             Node::Closed(_, ClosedNodeType::ClosedDirectory) => FileType::Directory,
@@ -113,8 +137,15 @@ fn visit_dirs(
                         };
 
                         if expected != file_type {
-                            visitor.visit_mismatching_entry(path, expected, file_type);
+                            visitor.visit_mismatching_path(path, maybe_owner, expected, file_type);
+                        } else if let Some(owner) = maybe_owner
+                            && !owner.enabled()
+                        {
+                            visitor.visit_untracked_path(path, Some(owner), file_type);
                         }
+                    }
+                    (None, file_type) => {
+                        visitor.visit_untracked_path(path, None, file_type);
                     }
                 }
             }

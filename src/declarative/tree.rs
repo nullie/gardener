@@ -1,10 +1,10 @@
 use std::{
     collections::BTreeMap,
     ffi::OsString,
-    path::{self, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
-use crate::declarative::{DeclaredFileType, PathType};
+use crate::declarative::DeclaredFileType;
 use crate::{config::OwnerModule, declarative::DeclaredPathType};
 use eyre::Context;
 use thiserror::Error;
@@ -185,7 +185,7 @@ impl<'a> Iterator for TreeIterator<'a> {
         while let Some(top) = self.stack.last_mut() {
             if let Some((name, item)) = top.next() {
                 match item {
-                    Node::Closed(owner, closed_node_type) => {
+                    Node::Closed(_owner, closed_node_type) => {
                         let declared_path_type = match closed_node_type {
                             ClosedNodeType::ClosedDirectory => DeclaredPathType::ClosedDirectory,
                             ClosedNodeType::File(declared_file_type) => {
