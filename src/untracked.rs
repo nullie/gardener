@@ -25,41 +25,43 @@ pub fn check_untracked() -> eyre::Result<()> {
 
     config.add_to_tree(&mut tree)?;
 
-    let mut visitor = SimpleVisitor {
-        unknown_dirs: Vec::new(),
-        unknown_files: Vec::new(),
-    };
+    let mut visitor = SimpleVisitor::default();
 
     visit_dirs(Path::new("/"), &tree.root, &mut visitor)?;
 
-    println!("Unknown dirs:");
-    for dir in visitor.unknown_dirs {
-        println!("{dir:?}");
-    }
-
-    println!("Unknown files:");
-    for file in visitor.unknown_files {
-        println!("{file:?}");
-    }
+    visitor.print_report();
 
     Ok(())
 }
 
-struct SystemReport {
-    untracked: Vec<Entry>,
-    tracked_by_disabled_module: BTreeMap<String, Entry>,
-}
-
-struct Entry {
+struct UntrackedPath {
     path: PathBuf,
     file_type: FileType,
 }
 
-trait Visitor {
+impl std::fmt::Display for UntrackedPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let type_symbol = match self.file_type {
+            FileType::Directory => 'd',
+            FileType::File(declared_type) => match declared_type {
+                DeclaredFileType::Regular => 'f',
+                DeclaredFileType::Symlink => 's',
+                DeclaredFileType::Fifo => 'p',
+                DeclaredFileType::CharDevice => 'b',
+                DeclaredFileType::BlockDevice => 'l',
+            },
+            FileType::Other(_file_type) => '?',
+        };
+
+        write!(f, "{} {}", type_symbol, self.path.display())
+    }
+}
+
+trait Visitor<'a> {
     fn visit_untracked_path(
         &mut self,
         path: PathBuf,
-        owner: Option<OwnerModule>,
+        owner: Option<OwnerModule<'a>>,
         file_type: FileType,
     );
     fn visit_mismatching_path(
@@ -72,19 +74,49 @@ trait Visitor {
     fn visit_error(&mut self, dir: PathBuf, e: std::io::Error);
 }
 
-struct SimpleVisitor {
-    unknown_dirs: Vec<PathBuf>,
-    unknown_files: Vec<PathBuf>,
+#[derive(Default)]
+struct SimpleVisitor<'a> {
+    untracked: Vec<UntrackedPath>,
+    tracked_by_disabled_module: BTreeMap<OwnerModule<'a>, Vec<UntrackedPath>>,
 }
 
-impl Visitor for SimpleVisitor {
+impl SimpleVisitor<'_> {
+    fn print_report(&self) {
+        println!("Untracked paths:");
+
+        for untracked_path in &self.untracked {
+            println!("  {}", untracked_path);
+        }
+
+        println!();
+
+        println!("Tracked by disabled modules:");
+
+        for (owner, tracked_paths) in self.tracked_by_disabled_module.iter() {
+            println!("  {:?}", owner);
+
+            for tracked_path in tracked_paths {
+                println!("    {}", tracked_path);
+            }
+        }
+    }
+}
+
+impl<'a> Visitor<'a> for SimpleVisitor<'a> {
     fn visit_untracked_path(
         &mut self,
         path: PathBuf,
-        owner: Option<OwnerModule>,
+        maybe_owner: Option<OwnerModule<'a>>,
         file_type: FileType,
     ) {
-        println!("{owner:?}: {} {file_type:?}", path.display());
+        if let Some(owner) = maybe_owner {
+            self.tracked_by_disabled_module
+                .entry(owner)
+                .or_default()
+                .push(UntrackedPath { path, file_type });
+        } else {
+            self.untracked.push(UntrackedPath { path, file_type });
+        }
     }
 
     fn visit_mismatching_path(
@@ -105,10 +137,10 @@ impl Visitor for SimpleVisitor {
     }
 }
 
-fn visit_dirs(
+fn visit_dirs<'a>(
     dir: &Path,
-    tree_directory: &BTreeMap<OsString, Node>,
-    visitor: &mut impl Visitor,
+    tree_directory: &'a BTreeMap<OsString, Node>,
+    visitor: &mut impl Visitor<'a>,
 ) -> eyre::Result<()> {
     match fs::read_dir(dir) {
         Ok(entries) => {

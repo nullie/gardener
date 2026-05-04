@@ -57,7 +57,7 @@ pub struct Paths {
     pub symlinks: Vec<PathBuf>,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum OwnerModule<'a> {
     AdhocSystem {
         name: &'a str,
