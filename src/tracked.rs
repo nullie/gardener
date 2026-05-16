@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, io};
 
 use crate::{
     config::Config,
@@ -29,7 +29,10 @@ pub fn check_tracked() -> eyre::Result<()> {
                 }
             })
             .map(Cow::from),
-            Err(err) => Some(Cow::from(err.to_string())),
+            Err(err) => Some(match err.kind() {
+                io::ErrorKind::NotFound => "not found".into(),
+                _ => format!("error: {}", err).into(),
+            }),
         };
 
         if let Some(err_message) = err_message {
