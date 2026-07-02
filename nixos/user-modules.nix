@@ -2,6 +2,7 @@
 {
   services.gardener.availableModules.user = {
     # keep-sorted start block=yes
+    android-tools.data.directories = [ ".android" ];
     atuin.data.directories = [ ".local/share/atuin" ];
     bambu = {
       cache.directories = [ ".cache/bambu-studio" ];
@@ -77,6 +78,10 @@
     };
     gstreamer.cache.directories = [ ".cache/gstreamer-1.0" ];
     gtk.cache.directories = [ ".cache/gtk-4.0" ];
+    helix = {
+      cache.directories = [ ".cache/helix" ];
+      data.directories = [ ".config/helix" ];
+    };
     inkscape = {
       cache.directories = [ ".cache/inkscape" ];
       data.directories = [ ".config/inkscape" ];
@@ -88,6 +93,7 @@
       ".lesshst"
       ".local/state/lesshst"
     ];
+    libreoffice.data.directories = [ ".config/libreoffice" ];
     lua-language-server.cache.directories = [ ".cache/lua-language-server" ];
     mesa.cache.directories = [
       ".cache/mesa_shader_cache"
@@ -122,6 +128,7 @@
       data.symlinks = [ ".nix-profile" ];
     };
     nix-output-monitor.data.directories = [ ".local/state/nix-output-monitor" ];
+    nixseparatedebuginfod2.cache.directories = [ ".cache/debuginfod_client" ];
     nss.ephemeral.directories = [ ".pki" ];
     obsidian.data.directories = [ ".config/obsidian" ];
     oh-my-zsh.cache.directories = [ ".cache/oh-my-zsh" ];
