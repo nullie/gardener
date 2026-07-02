@@ -22,13 +22,14 @@
         ] (system: function nixpkgs.legacyPackages.${system});
     in
     {
-      packages = forAllSystems (pkgs: {
+      packages = forAllSystems (pkgs: rec {
         default = pkgs.rustPlatform.buildRustPackage {
           name = "gardener";
           src = ./.;
 
           cargoLock.lockFile = ./Cargo.lock;
         };
+        gardener = default;
       });
 
       devShells = forAllSystems (
@@ -55,6 +56,27 @@
         }
       );
 
-      nixosModules.default = null;
+      nixosModules.default =
+        { ... }:
+        {
+          imports = [
+            ./nixos
+          ];
+
+          nixpkgs.overlays =
+            let
+              overlay =
+                final: prev:
+                let
+                  system = prev.stdenv.hostPlatform.system;
+                in
+                {
+                  inherit (self.packages.${system}) gardener;
+                };
+            in
+            [
+              overlay
+            ];
+        };
     };
 }
