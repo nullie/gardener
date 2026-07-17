@@ -126,11 +126,14 @@
     restic.cache.directories = lib.mapAttrsToList (
       name: _: "/var/cache/restic-backups-${name}"
     ) config.services.restic.backups;
-    restic.data.files = builtins.concatLists (
-      lib.mapAttrsToList (_: value: [
-        value.passwordFile
-        value.repositoryFile
-      ]) config.services.restic.backups
+    restic.data.files = builtins.filter (x: !builtins.isNull x) (
+      builtins.concatLists (
+        lib.mapAttrsToList (_: value: [
+          value.passwordFile
+          value.repositoryFile
+          value.rcloneConfigFile
+        ]) config.services.restic.backups
+      )
     );
     spnavd.data.files = [
       "/etc/spnavrc"
