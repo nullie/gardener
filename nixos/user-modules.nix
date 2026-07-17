@@ -35,6 +35,7 @@
       data.files = [
         ".config/DankMaterialShell/.firstlaunch"
         ".config/DankMaterialShell/.changelog-1.4"
+        ".config/DankMaterialShell/.changelog-1.5"
         ".local/state/DankMaterialShell/appusage.json"
         ".local/state/DankMaterialShell/notepad-session.json"
       ];
