@@ -32,10 +32,9 @@
         gardener = default;
       });
 
-      devShells = forAllSystems (
-        pkgs:
-        pkgs.mkShell {
-          buildInputs = with pkgs; [
+      devShells = forAllSystems (pkgs: {
+        default = pkgs.mkShell {
+          packages = with pkgs; [
             cargo
             rustc
             rustfmt
@@ -44,8 +43,8 @@
             rustPackages.clippy
           ];
           RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
-        }
-      );
+        };
+      });
 
       formatter = forAllSystems (
         pkgs:
