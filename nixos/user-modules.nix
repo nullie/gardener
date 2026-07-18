@@ -23,6 +23,7 @@
       data.files = [ ".config/dconf/user" ];
       cache.files = [ ".cache/dconf/user" ];
     };
+    ddcutil.cache.directories = [ ".cache/ddcutil" ];
     dgop.data.files = [ ".config/dgop/colors.json" ];
     direnv.data.directories = [ ".local/share/direnv/allow" ];
     discord.data.directories = [ ".config/discord" ];
