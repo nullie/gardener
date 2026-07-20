@@ -148,14 +148,14 @@
       ".config/pulse/cookie"
     ];
     python.data.files = [ ".python_history" ];
+    qalculate.data.files = [
+      ".config/qalculate/qalc.cfg"
+      ".local/state/qalculate/qalc.history"
+    ];
     qt = {
       cache.directories = [ ".cache/qtshadercache-x86_64-little_endian-lp64" ];
       data.files = [ ".config/QtProject.conf" ];
     };
-    qualculate.data.files = [
-      ".config/qalculate/qalc.cfg"
-      ".local/state/qalculate/qalc.history"
-    ];
     quickshell.cache.directories = [ ".cache/quickshell" ];
     qutebrowser = {
       cache.directories = [ ".cache/qutebrowser" ];
