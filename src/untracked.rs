@@ -130,21 +130,27 @@ impl SimpleVisitor<'_> {
     }
 
     fn print_report(&self) {
-        println!("Untracked paths:");
+        if !self.untracked.is_empty() {
+            println!("Untracked paths:");
 
-        for untracked_path in &self.untracked {
-            println!("  {}", untracked_path);
+            for untracked_path in &self.untracked {
+                println!("  {}", untracked_path);
+            }
+
+            if !self.tracked_by_disabled_module.is_empty() {
+                println!();
+            }
         }
 
-        println!();
+        if !self.tracked_by_disabled_module.is_empty() {
+            println!("Tracked by disabled modules:");
 
-        println!("Tracked by disabled modules:");
+            for (owner, tracked_paths) in self.tracked_by_disabled_module.iter() {
+                println!("  {:?}", owner);
 
-        for (owner, tracked_paths) in self.tracked_by_disabled_module.iter() {
-            println!("  {:?}", owner);
-
-            for tracked_path in tracked_paths {
-                println!("    {}", tracked_path);
+                for tracked_path in tracked_paths {
+                    println!("    {}", tracked_path);
+                }
             }
         }
     }
