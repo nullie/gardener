@@ -179,7 +179,7 @@ impl SimpleVisitor<'_> {
             };
         }
 
-        println!("gardener.config = {{");
+        println!("services.gardener = {{");
         println!("  enabledModules = {{");
 
         for name in system_modules {
