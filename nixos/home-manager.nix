@@ -14,5 +14,5 @@
           symlinks = map (x: x.target) recursive.wrong;
         };
     };
-  }) config.home-manager.users;
+  }) config.home-manager.users or { };
 }
