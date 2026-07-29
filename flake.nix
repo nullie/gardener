@@ -110,6 +110,17 @@
             programs.nixfmt.enable = true;
             programs.keep-sorted.enable = true;
           };
+
+          checks =
+            let
+              checkArgs = {
+                inherit self pkgs;
+              };
+            in
+            {
+              hello-world-server = import ./nixos/tests/foo.nix checkArgs;
+            };
+
         };
 
       flake.nixosModules.default =
