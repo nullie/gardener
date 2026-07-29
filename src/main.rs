@@ -14,12 +14,22 @@ enum Command {
         opt_command: Option<CheckUntrackedSubCommand>,
     },
     CheckTracked,
+    Backup {
+        #[command(subcommand)]
+        command: BackupSubcommand,
+    },
 }
 
 #[derive(Subcommand, Clone)]
 enum CheckUntrackedSubCommand {
     SuggestConfig,
     Plain,
+}
+
+#[derive(Subcommand)]
+enum BackupSubcommand {
+    Ls,
+    Size,
 }
 
 fn main() -> eyre::Result<()> {
@@ -34,5 +44,11 @@ fn main() -> eyre::Result<()> {
             opt_command: Some(CheckUntrackedSubCommand::Plain),
         } => gardener::untracked::print_untracked(),
         Command::CheckTracked => gardener::tracked::check_tracked(),
+        Command::Backup {
+            command: BackupSubcommand::Ls,
+        } => gardener::backup::ls(),
+        Command::Backup {
+            command: BackupSubcommand::Size,
+        } => gardener::backup::size(),
     }
 }
