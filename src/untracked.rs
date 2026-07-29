@@ -253,6 +253,7 @@ impl<'a> Visitor<'a> for SimpleVisitor<'a> {
                 false
             }
         } else {
+            self.report_untracked_path(path, maybe_owner, FileType::Directory);
             false
         }
     }
