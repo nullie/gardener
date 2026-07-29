@@ -1,3 +1,4 @@
+pub mod tmpfiles;
 pub mod tree;
 
 #[derive(Debug, Eq, PartialEq)]
