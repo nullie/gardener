@@ -66,14 +66,14 @@ impl Config {
     }
 
     pub fn add_to_tree<'a>(&'a self, tree: &mut Tree<'a>) -> eyre::Result<()> {
-        for (path, path_properties) in self.paths() {
-            tree.add_path(&path, path_properties)?;
+        for (path, path_type, path_properties) in self.paths() {
+            tree.add_path(&path, path_type, path_properties)?;
         }
 
         Ok(())
     }
 
-    pub fn paths(&self) -> impl Iterator<Item = (PathBuf, declarative::Properties<'_>)> {
+    pub fn paths(&self) -> impl Iterator<Item = (PathBuf, PathType, declarative::Properties<'_>)> {
         let user_paths = self.users.iter().flat_map(|(user_name, user_config)| {
             let home_dir = Path::new(&user_config.home);
 
@@ -83,16 +83,7 @@ impl Config {
                     user: user_name,
                 };
 
-                module_to_paths(module).map(move |(path, path_type, storage_class)| {
-                    (
-                        path,
-                        declarative::Properties {
-                            path_type,
-                            owner,
-                            storage_class,
-                        },
-                    )
-                })
+                module_to_paths(module, owner)
             });
 
             let paths = user_config.modules.iter().flat_map(|(name, &enabled)| {
@@ -103,78 +94,60 @@ impl Config {
                     enabled,
                 };
 
-                module_to_paths(module).map(move |(path, path_type, storage_class)| {
-                    (
-                        path,
-                        declarative::Properties {
-                            path_type,
-                            owner,
-                            storage_class,
-                        },
-                    )
-                })
+                module_to_paths(module, owner)
             });
 
             adhoc_paths
                 .chain(paths)
-                .map(|(path, properties)| (home_dir.join(path), properties))
+                .map(|(path, path_type, properties)| (home_dir.join(path), path_type, properties))
         });
 
         let system_paths = self.enabled_modules.iter().flat_map(|(name, &enabled)| {
             let module = self.available_modules.system.get(name).unwrap();
             let owner = declarative::Owner::System { name, enabled };
 
-            module_to_paths(module).map(move |(path, path_type, storage_class)| {
-                (
-                    path.to_owned(),
-                    declarative::Properties {
-                        path_type,
-                        owner,
-                        storage_class,
-                    },
-                )
-            })
+            module_to_paths(module, owner)
+                .map(move |(path, path_type, properties)| (path.to_owned(), path_type, properties))
         });
 
         user_paths.chain(system_paths)
     }
 }
 
-fn module_to_paths(module: &Module) -> impl Iterator<Item = (&Path, PathType, StorageClass)> {
+fn module_to_paths<'a>(
+    module: &'a Module,
+    owner: declarative::Owner<'a>,
+) -> impl Iterator<Item = (&'a Path, PathType, declarative::Properties<'a>)> {
     [
         (&module.cache, StorageClass::Cache),
         (&module.data, StorageClass::Data),
         (&module.ephemeral, StorageClass::Ephemeral),
     ]
     .into_iter()
-    .flat_map(|(path_set, storage_class)| path_set_to_paths(path_set, storage_class))
+    .flat_map(move |(path_set, storage_class)| {
+        path_set_to_paths(
+            path_set,
+            declarative::Properties {
+                owner,
+                storage_class,
+            },
+        )
+    })
 }
 
-fn path_set_to_paths(
-    path_set: &Paths,
-    storage_class: StorageClass,
-) -> impl Iterator<Item = (&Path, PathType, StorageClass)> {
+fn path_set_to_paths<'a>(
+    path_set: &'a Paths,
+    properties: declarative::Properties<'a>,
+) -> impl Iterator<Item = (&'a Path, PathType, declarative::Properties<'a>)> {
     [
-        (
-            &path_set.directories,
-            PathType::ClosedDirectory,
-            storage_class,
-        ),
-        (
-            &path_set.files,
-            PathType::File(FileType::Regular),
-            storage_class,
-        ),
-        (
-            &path_set.symlinks,
-            PathType::File(FileType::Symlink),
-            storage_class,
-        ),
+        (&path_set.directories, PathType::ClosedDirectory),
+        (&path_set.files, PathType::File(FileType::Regular)),
+        (&path_set.symlinks, PathType::File(FileType::Symlink)),
     ]
     .into_iter()
-    .flat_map(|(paths, path_type, storage_class)| {
+    .flat_map(move |(paths, path_type)| {
         paths
             .iter()
-            .map(move |path| (path.as_ref(), path_type, storage_class))
+            .map(move |path| (path.as_ref(), path_type, properties))
     })
 }

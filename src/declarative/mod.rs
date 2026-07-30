@@ -32,7 +32,6 @@ impl StorageClass {
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub struct Properties<'a> {
-    pub path_type: PathType,
     pub owner: Owner<'a>,
     pub storage_class: StorageClass,
 }
