@@ -2,14 +2,14 @@ pub mod tmpfiles;
 pub mod tree;
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
-pub enum DeclaredPathType {
+pub enum PathType {
     OpenDirectory,
     ClosedDirectory,
-    File(DeclaredFileType),
+    File(FileType),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
-pub enum DeclaredFileType {
+pub enum FileType {
     Regular,
     Symlink,
     Fifo,
@@ -25,14 +25,14 @@ pub enum StorageClass {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
-pub struct DeclaredPathProperties<'a> {
-    pub path_type: DeclaredPathType,
-    pub owner_module: OwnerModule<'a>,
+pub struct Properties<'a> {
+    pub path_type: PathType,
+    pub owner_module: Owner<'a>,
     pub storage_class: StorageClass,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum OwnerModule<'a> {
+pub enum Owner<'a> {
     AdhocSystem {
         name: &'a str,
     },
@@ -51,13 +51,13 @@ pub enum OwnerModule<'a> {
     },
 }
 
-impl<'a> OwnerModule<'a> {
+impl<'a> Owner<'a> {
     pub fn enabled(&self) -> bool {
         match self {
-            OwnerModule::AdhocSystem { .. } => true,
-            OwnerModule::AdhocUser { .. } => true,
-            OwnerModule::System { enabled, .. } => *enabled,
-            OwnerModule::User { enabled, .. } => *enabled,
+            Owner::AdhocSystem { .. } => true,
+            Owner::AdhocUser { .. } => true,
+            Owner::System { enabled, .. } => *enabled,
+            Owner::User { enabled, .. } => *enabled,
         }
     }
 

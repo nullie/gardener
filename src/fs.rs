@@ -14,14 +14,14 @@ pub trait Visitor<'a> {
     fn visit_dir(
         &mut self,
         path: PathBuf,
-        maybe_owner: Option<declarative::OwnerModule<'a>>,
+        maybe_owner: Option<declarative::Owner<'a>>,
         expected: Option<FileType>,
         expected_children: bool,
     ) -> bool;
     fn visit_file(
         &mut self,
         path: PathBuf,
-        owner: Option<declarative::OwnerModule<'a>>,
+        owner: Option<declarative::Owner<'a>>,
         file_type: FileType,
         expected: Option<FileType>,
     );
@@ -93,7 +93,7 @@ fn visit_dir<'a>(
 #[derive(Debug, PartialEq, Eq)]
 pub enum FileType {
     Directory,
-    File(declarative::DeclaredFileType),
+    File(declarative::FileType),
     Other(fs::FileType),
 }
 
@@ -102,9 +102,9 @@ impl FileType {
         if file_type.is_dir() {
             FileType::Directory
         } else if file_type.is_file() {
-            FileType::File(declarative::DeclaredFileType::Regular)
+            FileType::File(declarative::FileType::Regular)
         } else if file_type.is_symlink() {
-            FileType::File(declarative::DeclaredFileType::Symlink)
+            FileType::File(declarative::FileType::Symlink)
         } else {
             FileType::Other(file_type)
         }

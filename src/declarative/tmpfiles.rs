@@ -2,10 +2,10 @@ use std::path::Path;
 
 use systemd_tmpfiles::Directive;
 
-use crate::declarative::{DeclaredFileType, DeclaredPathType, OwnerModule, tree::Tree};
+use crate::declarative::{FileType, Owner, PathType, tree::Tree};
 
 pub fn add_systemd_tmpfiles(tree: &mut Tree) -> eyre::Result<()> {
-    let owner = OwnerModule::AdhocSystem {
+    let owner = Owner::AdhocSystem {
         name: "systemd-tmpfiles",
     };
     let output = std::process::Command::new("systemd-tmpfiles")
@@ -21,21 +21,15 @@ pub fn add_systemd_tmpfiles(tree: &mut Tree) -> eyre::Result<()> {
 
     for entry in parsed {
         let maybe_entry_type = match entry.directive() {
-            Directive::CreateSymlink { .. } => {
-                Some(DeclaredPathType::File(DeclaredFileType::Symlink))
-            }
+            Directive::CreateSymlink { .. } => Some(PathType::File(FileType::Symlink)),
             Directive::CreateFile { .. } | Directive::WriteToFile { .. } => {
-                Some(DeclaredPathType::File(DeclaredFileType::Regular))
+                Some(PathType::File(FileType::Regular))
             }
-            Directive::CreateFifo { .. } => Some(DeclaredPathType::File(DeclaredFileType::Fifo)),
-            Directive::CreateCharDeviceNode { .. } => {
-                Some(DeclaredPathType::File(DeclaredFileType::CharDevice))
-            }
-            Directive::CreateBlockDeviceNode { .. } => {
-                Some(DeclaredPathType::File(DeclaredFileType::BlockDevice))
-            }
+            Directive::CreateFifo { .. } => Some(PathType::File(FileType::Fifo)),
+            Directive::CreateCharDeviceNode { .. } => Some(PathType::File(FileType::CharDevice)),
+            Directive::CreateBlockDeviceNode { .. } => Some(PathType::File(FileType::BlockDevice)),
             Directive::CreateDirectory { .. } | Directive::CreateSubvolume { .. } => {
-                Some(DeclaredPathType::OpenDirectory)
+                Some(PathType::OpenDirectory)
             }
             _ => None,
         };

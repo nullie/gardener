@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::declarative::{self, DeclaredFileType, DeclaredPathType, StorageClass, tree::Tree};
+use crate::declarative::{self, FileType, PathType, StorageClass, tree::Tree};
 
 use serde::{Deserialize, Deserializer};
 
@@ -77,14 +77,12 @@ impl Config {
         Ok(())
     }
 
-    pub fn paths(
-        &self,
-    ) -> impl Iterator<Item = (PathBuf, declarative::DeclaredPathProperties<'_>)> {
+    pub fn paths(&self) -> impl Iterator<Item = (PathBuf, declarative::Properties<'_>)> {
         let user_paths = self.users.iter().flat_map(|(user_name, user_config)| {
             let home_dir = Path::new(&user_config.home);
 
             let adhoc_paths = user_config.adhoc.iter().flat_map(|(name, module)| {
-                let owner_module = declarative::OwnerModule::AdhocUser {
+                let owner_module = declarative::Owner::AdhocUser {
                     name,
                     user: user_name,
                 };
@@ -92,7 +90,7 @@ impl Config {
                 module_to_paths(module).map(move |(path, path_type, storage_class)| {
                     (
                         path,
-                        declarative::DeclaredPathProperties {
+                        declarative::Properties {
                             path_type,
                             owner_module,
                             storage_class,
@@ -103,7 +101,7 @@ impl Config {
 
             let paths = user_config.modules.iter().flat_map(|(name, &enabled)| {
                 let module = self.available_modules.user.get(name).unwrap();
-                let owner_module = declarative::OwnerModule::User {
+                let owner_module = declarative::Owner::User {
                     name,
                     user: user_name,
                     enabled,
@@ -112,7 +110,7 @@ impl Config {
                 module_to_paths(module).map(move |(path, path_type, storage_class)| {
                     (
                         path,
-                        declarative::DeclaredPathProperties {
+                        declarative::Properties {
                             path_type,
                             owner_module,
                             storage_class,
@@ -128,12 +126,12 @@ impl Config {
 
         let system_paths = self.enabled_modules.iter().flat_map(|(name, &enabled)| {
             let module = self.available_modules.system.get(name).unwrap();
-            let owner_module = declarative::OwnerModule::System { name, enabled };
+            let owner_module = declarative::Owner::System { name, enabled };
 
             module_to_paths(module).map(move |(path, path_type, storage_class)| {
                 (
                     path.to_owned(),
-                    declarative::DeclaredPathProperties {
+                    declarative::Properties {
                         path_type,
                         owner_module,
                         storage_class,
@@ -146,9 +144,7 @@ impl Config {
     }
 }
 
-fn module_to_paths(
-    module: &Module,
-) -> impl Iterator<Item = (&Path, DeclaredPathType, StorageClass)> {
+fn module_to_paths(module: &Module) -> impl Iterator<Item = (&Path, PathType, StorageClass)> {
     [
         (&module.cache, StorageClass::Cache),
         (&module.data, StorageClass::Data),
@@ -161,21 +157,21 @@ fn module_to_paths(
 fn path_set_to_paths(
     path_set: &Paths,
     storage_class: StorageClass,
-) -> impl Iterator<Item = (&Path, DeclaredPathType, StorageClass)> {
+) -> impl Iterator<Item = (&Path, PathType, StorageClass)> {
     [
         (
             &path_set.directories,
-            DeclaredPathType::ClosedDirectory,
+            PathType::ClosedDirectory,
             storage_class,
         ),
         (
             &path_set.files,
-            DeclaredPathType::File(DeclaredFileType::Regular),
+            PathType::File(FileType::Regular),
             storage_class,
         ),
         (
             &path_set.symlinks,
-            DeclaredPathType::File(DeclaredFileType::Symlink),
+            PathType::File(FileType::Symlink),
             storage_class,
         ),
     ]

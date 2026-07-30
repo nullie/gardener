@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, ffi::OsString, path::Path};
 
-use crate::declarative::{DeclaredFileType, DeclaredPathType, OwnerModule};
+use crate::declarative::{FileType, Owner, PathType};
 use eyre::Context;
 use thiserror::Error;
 
@@ -12,17 +12,17 @@ pub type Children<'a> = BTreeMap<OsString, Node<'a>>;
 
 #[derive(Debug)]
 pub enum Node<'a> {
-    Open(Option<OwnerModule<'a>>, Children<'a>),
-    Closed(OwnerModule<'a>, ClosedNodeType),
+    Open(Option<Owner<'a>>, Children<'a>),
+    Closed(Owner<'a>, ClosedNodeType),
 }
 
 impl<'a> Node<'a> {
-    fn to_declared_path_type(&self) -> DeclaredPathType {
+    fn to_declared_path_type(&self) -> PathType {
         match self {
-            Node::Open(_, _) => DeclaredPathType::OpenDirectory,
-            Node::Closed(_, ClosedNodeType::ClosedDirectory) => DeclaredPathType::ClosedDirectory,
+            Node::Open(_, _) => PathType::OpenDirectory,
+            Node::Closed(_, ClosedNodeType::ClosedDirectory) => PathType::ClosedDirectory,
             Node::Closed(_, ClosedNodeType::File(declared_file_type)) => {
-                DeclaredPathType::File(*declared_file_type)
+                PathType::File(*declared_file_type)
             }
         }
     }
@@ -31,7 +31,7 @@ impl<'a> Node<'a> {
 #[derive(Debug)]
 pub enum ClosedNodeType {
     ClosedDirectory,
-    File(DeclaredFileType),
+    File(FileType),
 }
 
 impl<'a> Tree<'a> {
@@ -61,9 +61,9 @@ impl<'a> Tree<'a> {
 
     pub fn add_path(
         &mut self,
-        owner: OwnerModule<'a>,
+        owner: Owner<'a>,
         path: &Path,
-        path_type: DeclaredPathType,
+        path_type: PathType,
     ) -> eyre::Result<()> {
         self.add_path_by_components(
             owner,
@@ -75,9 +75,9 @@ impl<'a> Tree<'a> {
 
     fn add_path_by_components(
         &mut self,
-        owner: OwnerModule<'a>,
+        owner: Owner<'a>,
         mut components: impl DoubleEndedIterator<Item = OsString>,
-        path_type: DeclaredPathType,
+        path_type: PathType,
     ) -> Result<(), TreeError> {
         let mut directory = &mut self.root;
 
@@ -104,11 +104,11 @@ impl<'a> Tree<'a> {
         match directory.entry(last_component) {
             std::collections::btree_map::Entry::Vacant(vacant) => {
                 vacant.insert(match path_type {
-                    DeclaredPathType::OpenDirectory => Node::Open(Some(owner), BTreeMap::new()),
-                    DeclaredPathType::ClosedDirectory => {
+                    PathType::OpenDirectory => Node::Open(Some(owner), BTreeMap::new()),
+                    PathType::ClosedDirectory => {
                         Node::Closed(owner, ClosedNodeType::ClosedDirectory)
                     }
-                    DeclaredPathType::File(file_type) => {
+                    PathType::File(file_type) => {
                         Node::Closed(owner, ClosedNodeType::File(file_type))
                     }
                 });
@@ -117,10 +117,10 @@ impl<'a> Tree<'a> {
                 let occupied = occupied.into_mut();
 
                 match (occupied, path_type) {
-                    (Node::Open(maybe_owner @ None, _), DeclaredPathType::OpenDirectory) => {
+                    (Node::Open(maybe_owner @ None, _), PathType::OpenDirectory) => {
                         *maybe_owner = Some(owner);
                     }
-                    (occupied @ Node::Open(_, _), DeclaredPathType::ClosedDirectory) => {
+                    (occupied @ Node::Open(_, _), PathType::ClosedDirectory) => {
                         // Closed directory swallows directories below
                         *occupied = Node::Closed(owner, ClosedNodeType::ClosedDirectory);
                     }

@@ -1,14 +1,14 @@
 use std::path::PathBuf;
 
-use crate::{declarative::DeclaredFileType, fs::FileType};
+use crate::{declarative, fs};
 
 pub struct UntrackedPath {
-    path: PathBuf,
-    file_type: FileType,
+    pub path: PathBuf,
+    pub file_type: fs::FileType,
 }
 
 impl UntrackedPath {
-    pub fn new(path: PathBuf, file_type: FileType) -> Self {
+    pub fn new(path: PathBuf, file_type: fs::FileType) -> Self {
         Self { path, file_type }
     }
 }
@@ -16,15 +16,15 @@ impl UntrackedPath {
 impl std::fmt::Display for UntrackedPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let type_symbol = match self.file_type {
-            FileType::Directory => 'd',
-            FileType::File(declared_type) => match declared_type {
-                DeclaredFileType::Regular => 'f',
-                DeclaredFileType::Symlink => 's',
-                DeclaredFileType::Fifo => 'p',
-                DeclaredFileType::CharDevice => 'b',
-                DeclaredFileType::BlockDevice => 'l',
+            fs::FileType::Directory => 'd',
+            fs::FileType::File(declared_type) => match declared_type {
+                declarative::FileType::Regular => 'f',
+                declarative::FileType::Symlink => 's',
+                declarative::FileType::Fifo => 'p',
+                declarative::FileType::CharDevice => 'b',
+                declarative::FileType::BlockDevice => 'l',
             },
-            FileType::Other(_file_type) => '?',
+            fs::FileType::Other(_file_type) => '?',
         };
 
         write!(f, "{} {}", type_symbol, self.path.display())

@@ -5,8 +5,9 @@ use std::{
 
 use crate::{
     config::Config,
-    declarative::{DeclaredFileType, OwnerModule, tmpfiles::add_systemd_tmpfiles, tree::Tree},
-    fs::{FileType, Visitor, visit_dirs},
+    declarative::{self, tmpfiles::add_systemd_tmpfiles, tree::Tree},
+    fs,
+    presentation::UntrackedPath,
 };
 
 pub fn check_untracked() -> eyre::Result<()> {
@@ -20,7 +21,7 @@ pub fn check_untracked() -> eyre::Result<()> {
 
     let mut visitor = SimpleVisitor::default();
 
-    visit_dirs(Path::new("/"), &tree, &mut visitor)?;
+    fs::visit_dirs(Path::new("/"), &tree, &mut visitor)?;
 
     visitor.print_report();
 
@@ -38,7 +39,7 @@ pub fn suggest_config() -> eyre::Result<()> {
 
     let mut visitor = SimpleVisitor::default();
 
-    crate::fs::visit_dirs(Path::new("/"), &tree, &mut visitor)?;
+    fs::visit_dirs(Path::new("/"), &tree, &mut visitor)?;
 
     visitor.print_suggested_config();
 
@@ -56,40 +57,17 @@ pub fn print_untracked() -> eyre::Result<()> {
 
     let mut visitor = SimpleVisitor::default();
 
-    crate::fs::visit_dirs(Path::new("/"), &tree, &mut visitor)?;
+    fs::visit_dirs(Path::new("/"), &tree, &mut visitor)?;
 
     visitor.print_untracked();
 
     Ok(())
 }
 
-struct UntrackedPath {
-    path: PathBuf,
-    file_type: FileType,
-}
-
-impl std::fmt::Display for UntrackedPath {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let type_symbol = match self.file_type {
-            FileType::Directory => 'd',
-            FileType::File(declared_type) => match declared_type {
-                DeclaredFileType::Regular => 'f',
-                DeclaredFileType::Symlink => 's',
-                DeclaredFileType::Fifo => 'p',
-                DeclaredFileType::CharDevice => 'b',
-                DeclaredFileType::BlockDevice => 'l',
-            },
-            FileType::Other(_file_type) => '?',
-        };
-
-        write!(f, "{} {}", type_symbol, self.path.display())
-    }
-}
-
 #[derive(Default)]
 struct SimpleVisitor<'a> {
     untracked: Vec<UntrackedPath>,
-    tracked_by_disabled_module: BTreeMap<OwnerModule<'a>, Vec<UntrackedPath>>,
+    tracked_by_disabled_module: BTreeMap<declarative::Owner<'a>, Vec<UntrackedPath>>,
 }
 
 impl<'a> SimpleVisitor<'a> {
@@ -137,12 +115,12 @@ impl<'a> SimpleVisitor<'a> {
 
         for owner in self.tracked_by_disabled_module.keys() {
             match owner {
-                OwnerModule::System { name, enabled } => {
+                declarative::Owner::System { name, enabled } => {
                     assert!(!enabled);
 
                     system_modules.push(name);
                 }
-                OwnerModule::User {
+                declarative::Owner::User {
                     name,
                     user,
                     enabled,
@@ -186,8 +164,8 @@ impl<'a> SimpleVisitor<'a> {
     fn report_untracked_path<'b: 'a>(
         &mut self,
         path: PathBuf,
-        maybe_owner: Option<OwnerModule<'b>>,
-        file_type: FileType,
+        maybe_owner: Option<declarative::Owner<'b>>,
+        file_type: fs::FileType,
     ) {
         if let Some(owner) = maybe_owner {
             self.tracked_by_disabled_module
@@ -202,9 +180,9 @@ impl<'a> SimpleVisitor<'a> {
     fn report_mismatching_path(
         &mut self,
         path: PathBuf,
-        owner: Option<OwnerModule>,
-        expected: FileType,
-        found: FileType,
+        owner: Option<declarative::Owner>,
+        expected: fs::FileType,
+        found: fs::FileType,
     ) {
         eprintln!(
             "{owner:?} {}: unexpected entry, expected {expected:?}, found {found:?}",
@@ -213,13 +191,13 @@ impl<'a> SimpleVisitor<'a> {
     }
 }
 
-impl<'a> Visitor<'a> for SimpleVisitor<'a> {
+impl<'a> fs::Visitor<'a> for SimpleVisitor<'a> {
     fn visit_file(
         &mut self,
         path: PathBuf,
-        maybe_owner: Option<OwnerModule<'a>>,
-        file_type: FileType,
-        maybe_expected: Option<FileType>,
+        maybe_owner: Option<declarative::Owner<'a>>,
+        file_type: fs::FileType,
+        maybe_expected: Option<fs::FileType>,
     ) {
         if let Some(expected) = maybe_expected {
             if expected != file_type {
@@ -241,19 +219,19 @@ impl<'a> Visitor<'a> for SimpleVisitor<'a> {
     fn visit_dir(
         &mut self,
         path: PathBuf,
-        maybe_owner: Option<OwnerModule<'a>>,
-        maybe_expected: Option<FileType>,
+        maybe_owner: Option<declarative::Owner<'a>>,
+        maybe_expected: Option<fs::FileType>,
         expected_children: bool,
     ) -> bool {
         if let Some(expected) = maybe_expected {
-            if expected == FileType::Directory {
+            if expected == fs::FileType::Directory {
                 expected_children
             } else {
-                self.report_mismatching_path(path, maybe_owner, expected, FileType::Directory);
+                self.report_mismatching_path(path, maybe_owner, expected, fs::FileType::Directory);
                 false
             }
         } else {
-            self.report_untracked_path(path, maybe_owner, FileType::Directory);
+            self.report_untracked_path(path, maybe_owner, fs::FileType::Directory);
             false
         }
     }
