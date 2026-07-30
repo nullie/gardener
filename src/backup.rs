@@ -41,13 +41,15 @@ impl<'a> fs::Visitor<'a> for LsVisitor {
         &mut self,
         path: std::path::PathBuf,
         file_type: fs::PathType,
+        len: u64,
         _maybe_expected_path_type: Option<fs::PathType>,
         maybe_properties: Option<crate::declarative::Properties>,
     ) {
         if maybe_properties.is_none_or(|properties| properties.storage_class.should_backup()) {
             println!(
-                "{}: {:?}",
+                "{}: {} {:?}",
                 UntrackedPath::new(path, file_type),
+                len,
                 maybe_properties.map(|properties| properties.owner)
             );
         }
