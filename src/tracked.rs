@@ -2,7 +2,7 @@ use std::{borrow::Cow, io};
 
 use crate::{
     config::Config,
-    declarative::{DeclaredFileType, DeclaredPathType},
+    declarative::{FileType, PathType},
 };
 
 pub fn check_tracked() -> eyre::Result<()> {
@@ -15,16 +15,14 @@ pub fn check_tracked() -> eyre::Result<()> {
 
         let err_message = match path.symlink_metadata() {
             Ok(metadata) => (match properties.path_type {
-                DeclaredPathType::OpenDirectory | DeclaredPathType::ClosedDirectory => {
+                PathType::OpenDirectory | PathType::ClosedDirectory => {
                     (!metadata.is_dir()).then_some("not a directory")
                 }
-                DeclaredPathType::File(DeclaredFileType::Regular) => {
-                    (!metadata.is_file()).then_some("not a file")
-                }
-                DeclaredPathType::File(DeclaredFileType::Symlink) => {
+                PathType::File(FileType::Regular) => (!metadata.is_file()).then_some("not a file"),
+                PathType::File(FileType::Symlink) => {
                     (!metadata.is_symlink()).then_some("not a symlink")
                 }
-                DeclaredPathType::File(_) => {
+                PathType::File(_) => {
                     todo!()
                 }
             })
