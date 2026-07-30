@@ -198,6 +198,7 @@ impl<'a> fs::Visitor<'a> for SimpleVisitor<'a> {
         &mut self,
         path: PathBuf,
         file_type: fs::PathType,
+        _len: u64,
         maybe_expected: Option<fs::PathType>,
         maybe_properties: Option<crate::declarative::Properties<'a>>,
     ) {

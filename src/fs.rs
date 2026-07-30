@@ -22,6 +22,7 @@ pub trait Visitor<'a> {
         &mut self,
         path: PathBuf,
         file_type: PathType,
+        len: u64,
         maybe_expected_path_type: Option<crate::fs::PathType>,
         maybe_properties: Option<declarative::Properties<'a>>,
     );
@@ -44,9 +45,10 @@ fn visit_dir<'a>(
     match fs::read_dir(dir) {
         Ok(entries) => {
             for entry in entries {
-                let entry = entry?;
+                let entry = entry.unwrap();
+                let metadata = entry.metadata().unwrap();
                 let path = entry.path();
-                let file_type = PathType::new(entry.file_type()?);
+                let file_type = PathType::new(entry.file_type().unwrap());
                 let maybe_tree_node = maybe_tree_directory
                     .and_then(|tree_directory| tree_directory.get(entry.file_name().as_os_str()));
                 let maybe_properties =
@@ -71,6 +73,7 @@ fn visit_dir<'a>(
                         visitor.visit_file(
                             path,
                             file_type,
+                            metadata.len(),
                             maybe_expected_path_type,
                             maybe_properties,
                         );
