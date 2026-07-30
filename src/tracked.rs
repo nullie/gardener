@@ -8,13 +8,13 @@ use crate::{
 pub fn check_tracked() -> eyre::Result<()> {
     let config = Config::load()?;
 
-    for (owner, path, path_type) in config.paths() {
-        if !owner.enabled() {
+    for (path, properties) in config.paths() {
+        if !properties.owner_module.enabled() {
             continue;
         }
 
         let err_message = match path.symlink_metadata() {
-            Ok(metadata) => (match path_type {
+            Ok(metadata) => (match properties.path_type {
                 DeclaredPathType::OpenDirectory | DeclaredPathType::ClosedDirectory => {
                     (!metadata.is_dir()).then_some("not a directory")
                 }

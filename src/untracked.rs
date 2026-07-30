@@ -4,8 +4,8 @@ use std::{
 };
 
 use crate::{
-    config::{Config, OwnerModule},
-    declarative::{DeclaredFileType, tmpfiles::add_systemd_tmpfiles, tree::Tree},
+    config::Config,
+    declarative::{DeclaredFileType, OwnerModule, tmpfiles::add_systemd_tmpfiles, tree::Tree},
     fs::{FileType, Visitor, visit_dirs},
 };
 

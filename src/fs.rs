@@ -5,21 +5,23 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::declarative::tree::{ClosedNodeType, Node, Tree};
-use crate::{config::OwnerModule, declarative::DeclaredFileType};
+use crate::declarative::{
+    self,
+    tree::{ClosedNodeType, Node, Tree},
+};
 
 pub trait Visitor<'a> {
     fn visit_dir(
         &mut self,
         path: PathBuf,
-        maybe_owner: Option<OwnerModule<'a>>,
+        maybe_owner: Option<declarative::OwnerModule<'a>>,
         expected: Option<FileType>,
         expected_children: bool,
     ) -> bool;
     fn visit_file(
         &mut self,
         path: PathBuf,
-        owner: Option<OwnerModule<'a>>,
+        owner: Option<declarative::OwnerModule<'a>>,
         file_type: FileType,
         expected: Option<FileType>,
     );
@@ -91,7 +93,7 @@ fn visit_dir<'a>(
 #[derive(Debug, PartialEq, Eq)]
 pub enum FileType {
     Directory,
-    File(DeclaredFileType),
+    File(declarative::DeclaredFileType),
     Other(fs::FileType),
 }
 
@@ -100,9 +102,9 @@ impl FileType {
         if file_type.is_dir() {
             FileType::Directory
         } else if file_type.is_file() {
-            FileType::File(DeclaredFileType::Regular)
+            FileType::File(declarative::DeclaredFileType::Regular)
         } else if file_type.is_symlink() {
-            FileType::File(DeclaredFileType::Symlink)
+            FileType::File(declarative::DeclaredFileType::Symlink)
         } else {
             FileType::Other(file_type)
         }
