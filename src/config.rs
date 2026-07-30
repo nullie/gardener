@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::declarative::{DeclaredFileType, DeclaredPathType, tree::Tree};
+use crate::declarative::{self, DeclaredFileType, DeclaredPathType, StorageClass, tree::Tree};
 
 use serde::{Deserialize, Deserializer};
 
@@ -57,37 +57,6 @@ pub struct Paths {
     pub symlinks: Vec<PathBuf>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum OwnerModule<'a> {
-    AdhocSystem {
-        name: &'a str,
-    },
-    AdhocUser {
-        name: &'a str,
-        user: &'a str,
-    },
-    System {
-        name: &'a str,
-        enabled: bool,
-    },
-    User {
-        name: &'a str,
-        user: &'a str,
-        enabled: bool,
-    },
-}
-
-impl<'a> OwnerModule<'a> {
-    pub fn enabled(&self) -> bool {
-        match self {
-            OwnerModule::AdhocSystem { .. } => true,
-            OwnerModule::AdhocUser { .. } => true,
-            OwnerModule::System { enabled, .. } => *enabled,
-            OwnerModule::User { enabled, .. } => *enabled,
-        }
-    }
-}
-
 impl Config {
     pub fn load() -> eyre::Result<Self> {
         let input = std::fs::File::open("/etc/gardener.json")?;
@@ -97,76 +66,123 @@ impl Config {
     }
 
     pub fn add_to_tree<'a>(&'a self, tree: &mut Tree<'a>) -> eyre::Result<()> {
-        for (owner, path, path_type) in self.paths() {
-            tree.add_path(owner, &path, path_type)?;
+        for (path, path_properties) in self.paths() {
+            tree.add_path(
+                path_properties.owner_module,
+                &path,
+                path_properties.path_type,
+            )?;
         }
 
         Ok(())
     }
 
-    pub fn paths(&self) -> impl Iterator<Item = (OwnerModule<'_>, PathBuf, DeclaredPathType)> {
+    pub fn paths(
+        &self,
+    ) -> impl Iterator<Item = (PathBuf, declarative::DeclaredPathProperties<'_>)> {
         let user_paths = self.users.iter().flat_map(|(user_name, user_config)| {
             let home_dir = Path::new(&user_config.home);
 
             let adhoc_paths = user_config.adhoc.iter().flat_map(|(name, module)| {
-                let owner_module = OwnerModule::AdhocUser {
+                let owner_module = declarative::OwnerModule::AdhocUser {
                     name,
                     user: user_name,
                 };
 
-                module_to_paths(module)
-                    .map(move |(path, file_type)| (owner_module, path, file_type))
+                module_to_paths(module).map(move |(path, path_type, storage_class)| {
+                    (
+                        path,
+                        declarative::DeclaredPathProperties {
+                            path_type,
+                            owner_module,
+                            storage_class,
+                        },
+                    )
+                })
             });
 
             let paths = user_config.modules.iter().flat_map(|(name, &enabled)| {
                 let module = self.available_modules.user.get(name).unwrap();
-                let owner_module = OwnerModule::User {
+                let owner_module = declarative::OwnerModule::User {
                     name,
                     user: user_name,
                     enabled,
                 };
 
-                module_to_paths(module)
-                    .map(move |(path, file_type)| (owner_module, path, file_type))
+                module_to_paths(module).map(move |(path, path_type, storage_class)| {
+                    (
+                        path,
+                        declarative::DeclaredPathProperties {
+                            path_type,
+                            owner_module,
+                            storage_class,
+                        },
+                    )
+                })
             });
 
             adhoc_paths
                 .chain(paths)
-                .map(|(owner_module, path, file_type)| {
-                    (owner_module, home_dir.join(path), file_type)
-                })
+                .map(|(path, properties)| (home_dir.join(path), properties))
         });
 
         let system_paths = self.enabled_modules.iter().flat_map(|(name, &enabled)| {
             let module = self.available_modules.system.get(name).unwrap();
-            let owner_module = OwnerModule::System { name, enabled };
+            let owner_module = declarative::OwnerModule::System { name, enabled };
 
-            module_to_paths(module)
-                .map(move |(path, file_type)| (owner_module, path.to_owned(), file_type))
+            module_to_paths(module).map(move |(path, path_type, storage_class)| {
+                (
+                    path.to_owned(),
+                    declarative::DeclaredPathProperties {
+                        path_type,
+                        owner_module,
+                        storage_class,
+                    },
+                )
+            })
         });
 
         user_paths.chain(system_paths)
     }
 }
 
-fn module_to_paths(module: &Module) -> impl Iterator<Item = (&Path, DeclaredPathType)> {
-    [&module.cache, &module.data, &module.ephemeral]
-        .into_iter()
-        .flat_map(path_set_to_paths)
+fn module_to_paths(
+    module: &Module,
+) -> impl Iterator<Item = (&Path, DeclaredPathType, StorageClass)> {
+    [
+        (&module.cache, StorageClass::Cache),
+        (&module.data, StorageClass::Data),
+        (&module.ephemeral, StorageClass::Ephemeral),
+    ]
+    .into_iter()
+    .flat_map(|(path_set, storage_class)| path_set_to_paths(path_set, storage_class))
 }
 
-fn path_set_to_paths(path_set: &Paths) -> impl Iterator<Item = (&Path, DeclaredPathType)> {
+fn path_set_to_paths(
+    path_set: &Paths,
+    storage_class: StorageClass,
+) -> impl Iterator<Item = (&Path, DeclaredPathType, StorageClass)> {
     [
-        (&path_set.directories, DeclaredPathType::ClosedDirectory),
+        (
+            &path_set.directories,
+            DeclaredPathType::ClosedDirectory,
+            storage_class,
+        ),
         (
             &path_set.files,
             DeclaredPathType::File(DeclaredFileType::Regular),
+            storage_class,
         ),
         (
             &path_set.symlinks,
             DeclaredPathType::File(DeclaredFileType::Symlink),
+            storage_class,
         ),
     ]
     .into_iter()
-    .flat_map(|(paths, path_type)| paths.iter().map(move |path| (path.as_ref(), path_type)))
+    .flat_map(|(paths, path_type, storage_class)| {
+        paths
+            .iter()
+            .map(move |path| (path.as_ref(), path_type, storage_class))
+    })
 }

@@ -2,9 +2,7 @@ use std::path::Path;
 
 use systemd_tmpfiles::Directive;
 
-use crate::config::OwnerModule;
-use crate::declarative::DeclaredPathType;
-use crate::declarative::{DeclaredFileType, tree::Tree};
+use crate::declarative::{DeclaredFileType, DeclaredPathType, OwnerModule, tree::Tree};
 
 pub fn add_systemd_tmpfiles(tree: &mut Tree) -> eyre::Result<()> {
     let owner = OwnerModule::AdhocSystem {

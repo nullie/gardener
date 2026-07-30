@@ -1,7 +1,6 @@
 use std::{collections::BTreeMap, ffi::OsString, path::Path};
 
-use crate::declarative::DeclaredFileType;
-use crate::{config::OwnerModule, declarative::DeclaredPathType};
+use crate::declarative::{DeclaredFileType, DeclaredPathType, OwnerModule};
 use eyre::Context;
 use thiserror::Error;
 
