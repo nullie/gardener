@@ -7,23 +7,23 @@ use std::{
 
 use crate::declarative::{
     self,
-    tree::{ClosedNodeType, Node, Tree},
+    tree::{Node, Tree},
 };
 
 pub trait Visitor<'a> {
     fn visit_dir(
         &mut self,
         path: PathBuf,
-        maybe_owner: Option<declarative::Owner<'a>>,
-        expected: Option<FileType>,
-        expected_children: bool,
+        maybe_expected_path_type: Option<crate::fs::PathType>,
+        maybe_properties: Option<declarative::Properties<'a>>,
+        has_declared_children: bool,
     ) -> bool;
     fn visit_file(
         &mut self,
         path: PathBuf,
-        owner: Option<declarative::Owner<'a>>,
-        file_type: FileType,
-        expected: Option<FileType>,
+        file_type: PathType,
+        maybe_expected_path_type: Option<crate::fs::PathType>,
+        maybe_properties: Option<declarative::Properties<'a>>,
     );
     fn visit_error(&mut self, dir: PathBuf, e: std::io::Error);
 }
@@ -46,38 +46,34 @@ fn visit_dir<'a>(
             for entry in entries {
                 let entry = entry?;
                 let path = entry.path();
-                let file_type = FileType::new(entry.file_type()?);
+                let file_type = PathType::new(entry.file_type()?);
                 let maybe_tree_node = maybe_tree_directory
                     .and_then(|tree_directory| tree_directory.get(entry.file_name().as_os_str()));
-                let maybe_owner = maybe_tree_node.and_then(|tree_node| match tree_node {
-                    Node::Open(maybe_owner, _) => maybe_owner.to_owned(),
-                    Node::Closed(owner, _) => Some(owner.to_owned()),
-                });
-                let maybe_expected_file_type = maybe_tree_node.map(|tree_node| match tree_node {
-                    Node::Open(_, _) => FileType::Directory,
-                    Node::Closed(_, ClosedNodeType::ClosedDirectory) => FileType::Directory,
-                    Node::Closed(_, ClosedNodeType::File(declared_file_type)) => {
-                        FileType::File(*declared_file_type)
-                    }
-                });
-                let maybe_children = match maybe_tree_node {
-                    Some(Node::Open(_maybe_owner, children)) => Some(children),
-                    _ => None,
-                };
+                let maybe_properties =
+                    maybe_tree_node.and_then(|tree_node| tree_node.maybe_properties());
+                let maybe_children =
+                    maybe_tree_node.and_then(|tree_node| tree_node.maybe_children());
+                let maybe_expected_path_type = maybe_tree_node
+                    .map(|tree_node| PathType::from_declarative(tree_node.path_type()));
 
                 match file_type {
-                    FileType::Directory => {
+                    PathType::Directory => {
                         if visitor.visit_dir(
                             path.clone(),
-                            maybe_owner,
-                            maybe_expected_file_type,
+                            maybe_expected_path_type,
+                            maybe_properties,
                             maybe_children.is_some(),
                         ) {
                             visit_dir(&path, maybe_children, visitor)?;
                         }
                     }
                     file_type => {
-                        visitor.visit_file(path, maybe_owner, file_type, maybe_expected_file_type);
+                        visitor.visit_file(
+                            path,
+                            file_type,
+                            maybe_expected_path_type,
+                            maybe_properties,
+                        );
                     }
                 }
             }
@@ -91,22 +87,31 @@ fn visit_dir<'a>(
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum FileType {
+pub enum PathType {
     Directory,
     File(declarative::FileType),
     Other(fs::FileType),
 }
 
-impl FileType {
+impl PathType {
     fn new(file_type: fs::FileType) -> Self {
         if file_type.is_dir() {
-            FileType::Directory
+            PathType::Directory
         } else if file_type.is_file() {
-            FileType::File(declarative::FileType::Regular)
+            PathType::File(declarative::FileType::Regular)
         } else if file_type.is_symlink() {
-            FileType::File(declarative::FileType::Symlink)
+            PathType::File(declarative::FileType::Symlink)
         } else {
-            FileType::Other(file_type)
+            PathType::Other(file_type)
+        }
+    }
+
+    pub fn from_declarative(path_type: declarative::PathType) -> Self {
+        match path_type {
+            declarative::PathType::OpenDirectory | declarative::PathType::ClosedDirectory => {
+                Self::Directory
+            }
+            declarative::PathType::File(file_type) => Self::File(file_type),
         }
     }
 }

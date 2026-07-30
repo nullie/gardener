@@ -9,7 +9,7 @@ pub fn check_tracked() -> eyre::Result<()> {
     let config = Config::load()?;
 
     for (path, properties) in config.paths() {
-        if !properties.owner_module.enabled() {
+        if !properties.owner.enabled() {
             continue;
         }
 

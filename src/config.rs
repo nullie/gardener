@@ -67,11 +67,7 @@ impl Config {
 
     pub fn add_to_tree<'a>(&'a self, tree: &mut Tree<'a>) -> eyre::Result<()> {
         for (path, path_properties) in self.paths() {
-            tree.add_path(
-                path_properties.owner_module,
-                &path,
-                path_properties.path_type,
-            )?;
+            tree.add_path(&path, path_properties)?;
         }
 
         Ok(())
@@ -82,7 +78,7 @@ impl Config {
             let home_dir = Path::new(&user_config.home);
 
             let adhoc_paths = user_config.adhoc.iter().flat_map(|(name, module)| {
-                let owner_module = declarative::Owner::AdhocUser {
+                let owner = declarative::Owner::AdhocUser {
                     name,
                     user: user_name,
                 };
@@ -92,7 +88,7 @@ impl Config {
                         path,
                         declarative::Properties {
                             path_type,
-                            owner_module,
+                            owner,
                             storage_class,
                         },
                     )
@@ -101,7 +97,7 @@ impl Config {
 
             let paths = user_config.modules.iter().flat_map(|(name, &enabled)| {
                 let module = self.available_modules.user.get(name).unwrap();
-                let owner_module = declarative::Owner::User {
+                let owner = declarative::Owner::User {
                     name,
                     user: user_name,
                     enabled,
@@ -112,7 +108,7 @@ impl Config {
                         path,
                         declarative::Properties {
                             path_type,
-                            owner_module,
+                            owner,
                             storage_class,
                         },
                     )
@@ -126,14 +122,14 @@ impl Config {
 
         let system_paths = self.enabled_modules.iter().flat_map(|(name, &enabled)| {
             let module = self.available_modules.system.get(name).unwrap();
-            let owner_module = declarative::Owner::System { name, enabled };
+            let owner = declarative::Owner::System { name, enabled };
 
             module_to_paths(module).map(move |(path, path_type, storage_class)| {
                 (
                     path.to_owned(),
                     declarative::Properties {
                         path_type,
-                        owner_module,
+                        owner,
                         storage_class,
                     },
                 )
