@@ -40,9 +40,9 @@ pub fn add_systemd_tmpfiles(tree: &mut Tree) -> eyre::Result<()> {
 
             tree.add_path(
                 Path::new(entry.path()),
+                path_type,
                 declarative::Properties {
                     owner,
-                    path_type,
                     storage_class: declarative::StorageClass::Ephemeral,
                 },
             )?;

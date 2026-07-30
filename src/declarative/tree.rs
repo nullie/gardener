@@ -12,22 +12,16 @@ pub type Children<'a> = BTreeMap<OsString, Node<'a>>;
 
 #[derive(Debug)]
 pub enum Node<'a> {
-    Open(Option<NodeProperties<'a>>, Children<'a>),
-    Closed(NodeProperties<'a>, ClosedNodeType),
+    Open(Option<declarative::Properties<'a>>, Children<'a>),
+    Closed(declarative::Properties<'a>, ClosedNodeType),
 }
 
 impl<'a> Node<'a> {
-    fn new(properties: declarative::Properties<'a>) -> Self {
-        let node_properties = NodeProperties::from_properties(properties);
-
-        match properties.path_type {
-            PathType::OpenDirectory => Node::Open(Some(node_properties), BTreeMap::new()),
-            PathType::ClosedDirectory => {
-                Node::Closed(node_properties, ClosedNodeType::ClosedDirectory)
-            }
-            PathType::File(file_type) => {
-                Node::Closed(node_properties, ClosedNodeType::File(file_type))
-            }
+    fn new(path_type: declarative::PathType, properties: declarative::Properties<'a>) -> Self {
+        match path_type {
+            PathType::OpenDirectory => Node::Open(Some(properties), BTreeMap::new()),
+            PathType::ClosedDirectory => Node::Closed(properties, ClosedNodeType::ClosedDirectory),
+            PathType::File(file_type) => Node::Closed(properties, ClosedNodeType::File(file_type)),
         }
     }
 
@@ -55,25 +49,9 @@ impl<'a> Node<'a> {
         };
 
         maybe_properties.map(|properties| declarative::Properties {
-            path_type: self.path_type(),
             owner: properties.owner,
             storage_class: properties.storage_class,
         })
-    }
-}
-
-#[derive(Debug)]
-struct NodeProperties<'a> {
-    owner: declarative::Owner<'a>,
-    storage_class: declarative::StorageClass,
-}
-
-impl<'a> NodeProperties<'a> {
-    fn from_properties(properties: declarative::Properties<'a>) -> Self {
-        Self {
-            owner: properties.owner,
-            storage_class: properties.storage_class,
-        }
     }
 }
 
@@ -111,15 +89,21 @@ impl<'a> Tree<'a> {
     pub fn add_path(
         &mut self,
         path: &Path,
+        path_type: declarative::PathType,
         properties: declarative::Properties<'a>,
     ) -> eyre::Result<()> {
-        self.add_path_by_components(Self::path_to_components(path)?.into_iter(), properties)
-            .wrap_err_with(|| format!("path: {path:?}"))
+        self.add_path_by_components(
+            Self::path_to_components(path)?.into_iter(),
+            path_type,
+            properties,
+        )
+        .wrap_err_with(|| format!("path: {path:?}"))
     }
 
     fn add_path_by_components(
         &mut self,
         mut components: impl DoubleEndedIterator<Item = OsString>,
+        path_type: declarative::PathType,
         properties: declarative::Properties<'a>,
     ) -> Result<(), TreeError> {
         let mut directory = &mut self.root;
@@ -146,21 +130,18 @@ impl<'a> Tree<'a> {
 
         match directory.entry(last_component) {
             std::collections::btree_map::Entry::Vacant(vacant) => {
-                vacant.insert(Node::new(properties));
+                vacant.insert(Node::new(path_type, properties));
             }
             std::collections::btree_map::Entry::Occupied(occupied) => {
                 let occupied = occupied.into_mut();
 
-                match (occupied, properties.path_type) {
+                match (occupied, path_type) {
                     (Node::Open(maybe_properties @ None, _), PathType::OpenDirectory) => {
-                        *maybe_properties = Some(NodeProperties::from_properties(properties));
+                        *maybe_properties = Some(properties);
                     }
                     (occupied @ Node::Open(_, _), PathType::ClosedDirectory) => {
                         // Closed directory swallows directories below
-                        *occupied = Node::Closed(
-                            NodeProperties::from_properties(properties),
-                            ClosedNodeType::ClosedDirectory,
-                        );
+                        *occupied = Node::Closed(properties, ClosedNodeType::ClosedDirectory);
                     }
                     (occupied, path_type) => {
                         let existing_path_type = occupied.path_type();
