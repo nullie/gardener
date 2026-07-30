@@ -28,23 +28,28 @@ impl LsVisitor {}
 impl<'a> fs::Visitor<'a> for LsVisitor {
     fn visit_dir(
         &mut self,
-        path: std::path::PathBuf,
-        maybe_owner: Option<crate::declarative::Owner<'a>>,
-        expected: Option<fs::FileType>,
+        _path: std::path::PathBuf,
+        _maybe_expected_path_type: Option<fs::PathType>,
+        maybe_properties: Option<crate::declarative::Properties>,
         has_declared_children: bool,
     ) -> bool {
-        has_declared_children || maybe_owner.is_none_or(|owner| owner.should_backup())
+        has_declared_children
+            || maybe_properties.is_none_or(|properties| properties.storage_class.should_backup())
     }
 
     fn visit_file(
         &mut self,
         path: std::path::PathBuf,
-        owner: Option<crate::declarative::Owner<'a>>,
-        file_type: fs::FileType,
-        expected: Option<fs::FileType>,
+        file_type: fs::PathType,
+        _maybe_expected_path_type: Option<fs::PathType>,
+        maybe_properties: Option<crate::declarative::Properties>,
     ) {
-        if owner.is_none_or(|owner| owner.should_backup()) {
-            println!("{}: {:?}", UntrackedPath::new(path, file_type), owner);
+        if maybe_properties.is_none_or(|properties| properties.storage_class.should_backup()) {
+            println!(
+                "{}: {:?}",
+                UntrackedPath::new(path, file_type),
+                maybe_properties.map(|properties| properties.owner)
+            );
         }
     }
 

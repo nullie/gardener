@@ -24,10 +24,16 @@ pub enum StorageClass {
     Data,
 }
 
+impl StorageClass {
+    pub fn should_backup(&self) -> bool {
+        matches!(self, Self::Data)
+    }
+}
+
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub struct Properties<'a> {
     pub path_type: PathType,
-    pub owner_module: Owner<'a>,
+    pub owner: Owner<'a>,
     pub storage_class: StorageClass,
 }
 
@@ -59,9 +65,5 @@ impl<'a> Owner<'a> {
             Owner::System { enabled, .. } => *enabled,
             Owner::User { enabled, .. } => *enabled,
         }
-    }
-
-    pub fn should_backup(&self) -> bool {
-        false
     }
 }

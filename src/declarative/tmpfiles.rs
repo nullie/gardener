@@ -2,7 +2,7 @@ use std::path::Path;
 
 use systemd_tmpfiles::Directive;
 
-use crate::declarative::{FileType, Owner, PathType, tree::Tree};
+use crate::declarative::{self, FileType, Owner, PathType, tree::Tree};
 
 pub fn add_systemd_tmpfiles(tree: &mut Tree) -> eyre::Result<()> {
     let owner = Owner::AdhocSystem {
@@ -20,7 +20,7 @@ pub fn add_systemd_tmpfiles(tree: &mut Tree) -> eyre::Result<()> {
     let parsed = systemd_tmpfiles::parser::parse_str(&output)?;
 
     for entry in parsed {
-        let maybe_entry_type = match entry.directive() {
+        let maybe_path_type = match entry.directive() {
             Directive::CreateSymlink { .. } => Some(PathType::File(FileType::Symlink)),
             Directive::CreateFile { .. } | Directive::WriteToFile { .. } => {
                 Some(PathType::File(FileType::Regular))
@@ -34,11 +34,18 @@ pub fn add_systemd_tmpfiles(tree: &mut Tree) -> eyre::Result<()> {
             _ => None,
         };
 
-        if let Some(entry_type) = maybe_entry_type {
+        if let Some(path_type) = maybe_path_type {
             // FIXME: return error
             assert!(!entry.path_is_glob());
 
-            tree.add_path(owner, Path::new(entry.path()), entry_type)?;
+            tree.add_path(
+                Path::new(entry.path()),
+                declarative::Properties {
+                    owner,
+                    path_type,
+                    storage_class: declarative::StorageClass::Ephemeral,
+                },
+            )?;
         }
     }
 

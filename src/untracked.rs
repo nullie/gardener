@@ -164,12 +164,12 @@ impl<'a> SimpleVisitor<'a> {
     fn report_untracked_path<'b: 'a>(
         &mut self,
         path: PathBuf,
-        maybe_owner: Option<declarative::Owner<'b>>,
-        file_type: fs::FileType,
+        maybe_properties: Option<declarative::Properties<'b>>,
+        file_type: fs::PathType,
     ) {
-        if let Some(owner) = maybe_owner {
+        if let Some(properties) = maybe_properties {
             self.tracked_by_disabled_module
-                .entry(owner)
+                .entry(properties.owner)
                 .or_default()
                 .push(UntrackedPath { path, file_type });
         } else {
@@ -180,12 +180,14 @@ impl<'a> SimpleVisitor<'a> {
     fn report_mismatching_path(
         &mut self,
         path: PathBuf,
-        owner: Option<declarative::Owner>,
-        expected: fs::FileType,
-        found: fs::FileType,
+        maybe_properties: Option<declarative::Properties<'_>>,
+        expected: fs::PathType,
+        found: fs::PathType,
     ) {
+        let maybe_owner = maybe_properties.map(|properties| properties.owner);
+
         eprintln!(
-            "{owner:?} {}: unexpected entry, expected {expected:?}, found {found:?}",
+            "{maybe_owner:?} {}: unexpected entry, expected {expected:?}, found {found:?}",
             path.display()
         );
     }
@@ -195,20 +197,20 @@ impl<'a> fs::Visitor<'a> for SimpleVisitor<'a> {
     fn visit_file(
         &mut self,
         path: PathBuf,
-        maybe_owner: Option<declarative::Owner<'a>>,
-        file_type: fs::FileType,
-        maybe_expected: Option<fs::FileType>,
+        file_type: fs::PathType,
+        maybe_expected: Option<fs::PathType>,
+        maybe_properties: Option<crate::declarative::Properties<'a>>,
     ) {
         if let Some(expected) = maybe_expected {
             if expected != file_type {
-                self.report_mismatching_path(path, maybe_owner, expected, file_type);
-            } else if let Some(owner) = maybe_owner
-                && !owner.enabled()
+                self.report_mismatching_path(path, maybe_properties, expected, file_type);
+            } else if let Some(properties) = maybe_properties
+                && !properties.owner.enabled()
             {
-                self.report_untracked_path(path, Some(owner), file_type);
+                self.report_untracked_path(path, Some(properties), file_type);
             }
         } else {
-            self.report_untracked_path(path, maybe_owner, file_type);
+            self.report_untracked_path(path, maybe_properties, file_type);
         }
     }
 
@@ -219,19 +221,24 @@ impl<'a> fs::Visitor<'a> for SimpleVisitor<'a> {
     fn visit_dir(
         &mut self,
         path: PathBuf,
-        maybe_owner: Option<declarative::Owner<'a>>,
-        maybe_expected: Option<fs::FileType>,
-        expected_children: bool,
+        maybe_expected_path_type: Option<fs::PathType>,
+        maybe_properties: Option<crate::declarative::Properties<'a>>,
+        has_declared_children: bool,
     ) -> bool {
-        if let Some(expected) = maybe_expected {
-            if expected == fs::FileType::Directory {
-                expected_children
+        if let Some(expected_path_type) = maybe_expected_path_type {
+            if expected_path_type == fs::PathType::Directory {
+                has_declared_children
             } else {
-                self.report_mismatching_path(path, maybe_owner, expected, fs::FileType::Directory);
+                self.report_mismatching_path(
+                    path,
+                    maybe_properties,
+                    expected_path_type,
+                    fs::PathType::Directory,
+                );
                 false
             }
         } else {
-            self.report_untracked_path(path, maybe_owner, fs::FileType::Directory);
+            self.report_untracked_path(path, maybe_properties, fs::PathType::Directory);
             false
         }
     }
