@@ -69,8 +69,9 @@ impl Config {
     pub fn to_tree(&self) -> eyre::Result<Tree<'_>> {
         let mut tree = Tree::new();
 
-        self.add_to_tree(&mut tree)?;
+        // Reverse order triggers a bug: #5
         declarative::tmpfiles::add_systemd_tmpfiles(&mut tree)?;
+        self.add_to_tree(&mut tree)?;
 
         Ok(tree)
     }
