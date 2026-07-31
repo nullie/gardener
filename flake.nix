@@ -46,16 +46,22 @@
           pre-commit.settings.hooks = {
             cargo-check.enable = true;
             cargo-sort.enable = true;
-            clippy.enable = true;
+            clippy = {
+              enable = true;
+              settings.allowedLints = [ "clippy::pedantic" ];
+              settings.denyWarnings = true;
+            };
             rustfmt.enable = true;
 
             nixfmt.enable = true;
+            statix.enable = true;
+
             keep-sorted.enable = true;
           };
 
           devShells = {
             default = pkgs.mkShell {
-              shellHook = config.pre-commit.shellHook;
+              inherit (config.pre-commit) shellHook;
 
               packages =
                 with pkgs;
@@ -91,7 +97,7 @@
               overlay =
                 final: prev:
                 let
-                  system = prev.stdenv.hostPlatform.system;
+                  inherit (prev.stdenv.hostPlatform) system;
                 in
                 {
                   inherit (self.packages.${system}) gardener;
