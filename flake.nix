@@ -2,6 +2,10 @@
   inputs = {
     flake-parts.url = "github:hercules-ci/flake-parts";
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    git-hooks-nix = {
+      url = "github:cachix/git-hooks.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     treefmt-nix = {
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -11,18 +15,20 @@
   outputs =
     inputs@{
       self,
-      flake-parts,
-      treefmt-nix,
       ...
     }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
+    inputs.flake-parts.lib.mkFlake { inherit inputs; } {
+      imports = [
+        inputs.git-hooks-nix.flakeModule
+      ];
+
       systems = [
         "x86_64-linux"
         "aarch64-linux"
       ];
 
       perSystem =
-        { pkgs, ... }:
+        { config, pkgs, ... }:
         {
 
           packages = rec {
@@ -35,21 +41,36 @@
             gardener = default;
           };
 
+          pre-commit.settings.hooks = {
+            cargo-check.enable = true;
+            cargo-sort.enable = true;
+            clippy.enable = true;
+            rustfmt.enable = true;
+
+            nixfmt.enable = true;
+            keep-sorted.enable = true;
+          };
+
           devShells = {
             default = pkgs.mkShell {
-              packages = with pkgs; [
-                cargo
-                rustc
-                rustfmt
-                rust-analyzer
-                pre-commit
-                rustPackages.clippy
-              ];
+              shellHook = config.pre-commit.shellHook;
+
+              packages =
+                with pkgs;
+                [
+                  cargo
+                  rustc
+                  rustfmt
+                  rust-analyzer
+                  rustPackages.clippy
+                ]
+                ++ config.pre-commit.settings.enabledPackages;
+
               RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
             };
           };
 
-          formatter = treefmt-nix.lib.mkWrapper pkgs {
+          formatter = inputs.treefmt-nix.lib.mkWrapper pkgs {
             projectRootFile = "flake.nix";
             programs.nixfmt.enable = true;
             programs.keep-sorted.enable = true;
