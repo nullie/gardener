@@ -1,11 +1,15 @@
 use std::{
-    collections::BTreeMap, ffi::OsString, fs, ops::ControlFlow, os::unix::fs::FileTypeExt,
+    collections::BTreeMap,
+    ffi::OsString,
+    fs,
+    ops::ControlFlow,
+    os::unix::fs::FileTypeExt,
     path::Path,
 };
 
 use crate::declarative::{
-    self,
     tree::{Node, Tree},
+    {self},
 };
 
 pub trait Visitor<'a> {

@@ -1,6 +1,10 @@
 {
   inputs = {
     # keep-sorted start block=yes
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     flake-parts.url = "github:hercules-ci/flake-parts";
     git-hooks-nix = {
       url = "github:cachix/git-hooks.nix";
@@ -30,8 +34,23 @@
       ];
 
       perSystem =
-        { config, pkgs, ... }:
         {
+          config,
+          system,
+          pkgs,
+          ...
+        }:
+        let
+          rustfmt = pkgs.fenix.default.rustfmt;
+        in
+        {
+          _module.args.pkgs = import inputs.nixpkgs {
+            inherit system;
+            overlays = [
+              inputs.fenix.overlays.default
+            ];
+            config = { };
+          };
 
           packages = rec {
             default = pkgs.rustPlatform.buildRustPackage {
@@ -51,7 +70,10 @@
               settings.allowedLints = [ "clippy::pedantic" ];
               settings.denyWarnings = true;
             };
-            rustfmt.enable = true;
+            rustfmt = {
+              enable = true;
+              package = rustfmt;
+            };
 
             nixfmt.enable = true;
             statix.enable = true;

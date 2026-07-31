@@ -4,8 +4,9 @@ use std::{
     path::Path,
 };
 
-use crate::declarative::{self, FileType, PathType, Properties};
 use thiserror::Error;
+
+use crate::declarative::{self, FileType, PathType, Properties};
 
 pub struct Tree<'a> {
     pub root: Children<'a>,

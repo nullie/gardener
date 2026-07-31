@@ -4,8 +4,7 @@ use std::path::Path;
 
 use rootcause::Result;
 
-use crate::fs;
-use crate::{config::Config, presentation::UntrackedPath};
+use crate::{config::Config, fs, presentation::UntrackedPath};
 
 pub fn ls() -> Result<()> {
     let config = Config::load()?;
