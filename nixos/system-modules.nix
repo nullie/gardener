@@ -46,36 +46,38 @@
           # nixos/modules/services/networking/wpa_supplicant.nix
           "/etc/wpa_supplicant/imperative.conf"
         ];
-        ephemeral.files = [
-          # TODO: investigate, try to delete and reboot
-          "/etc/.pwd.lock"
-          # nixos/modules/system/etc/setup-etc.pl
-          "/etc/.clean"
-          "/etc/NIXOS"
-        ]
-        ++ etcPaths "file";
-        ephemeral.symlinks = etcPaths "symlink" ++ [
-          # nixos/modules/system/etc/setup-etc.pl
-          "/etc/static"
-          # nixos/modules/config/shells-environment.nix
-          "/bin/sh"
-          # nixos/modules/system/activation/activation-script.nix
-          "/usr/bin/env"
-        ];
-        ephemeral.directories =
-          etcPaths "directory"
-          ++ map (x: "${if x.mountPoint == "/" then "" else x.mountPoint}/lost+found") (
-            builtins.filter (x: x.fsType == "ext4") (builtins.attrValues config.fileSystems)
-          )
-          ++ [
-            "/dev"
-            "/sys"
-            "/proc"
-            "/tmp"
-            "/var/tmp"
-            # TODO: split up
-            "/run"
+        ephemeral = {
+          files = [
+            # TODO: investigate, try to delete and reboot
+            "/etc/.pwd.lock"
+            # nixos/modules/system/etc/setup-etc.pl
+            "/etc/.clean"
+            "/etc/NIXOS"
+          ]
+          ++ etcPaths "file";
+          symlinks = etcPaths "symlink" ++ [
+            # nixos/modules/system/etc/setup-etc.pl
+            "/etc/static"
+            # nixos/modules/config/shells-environment.nix
+            "/bin/sh"
+            # nixos/modules/system/activation/activation-script.nix
+            "/usr/bin/env"
           ];
+          directories =
+            etcPaths "directory"
+            ++ map (x: "${if x.mountPoint == "/" then "" else x.mountPoint}/lost+found") (
+              builtins.filter (x: x.fsType == "ext4") (builtins.attrValues config.fileSystems)
+            )
+            ++ [
+              "/dev"
+              "/sys"
+              "/proc"
+              "/tmp"
+              "/var/tmp"
+              # TODO: split up
+              "/run"
+            ];
+        };
       };
     # keep-sorted start block=yes
     accounts-daemon.data.directories = [ "/var/lib/AccountsService" ];
