@@ -3,21 +3,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{
-    config::Config,
-    declarative::{self, tmpfiles::add_systemd_tmpfiles, tree::Tree},
-    fs,
-    presentation::UntrackedPath,
-};
+use crate::{config::Config, declarative, fs, presentation::UntrackedPath};
 
 pub fn check_untracked() -> eyre::Result<()> {
     let config = Config::load()?;
-
-    let mut tree = Tree::new();
-
-    add_systemd_tmpfiles(&mut tree)?;
-
-    config.add_to_tree(&mut tree)?;
+    let tree = config.to_tree()?;
 
     let mut visitor = SimpleVisitor::default();
 
@@ -30,12 +20,7 @@ pub fn check_untracked() -> eyre::Result<()> {
 
 pub fn suggest_config() -> eyre::Result<()> {
     let config = Config::load()?;
-
-    let mut tree = Tree::new();
-
-    add_systemd_tmpfiles(&mut tree)?;
-
-    config.add_to_tree(&mut tree)?;
+    let tree = config.to_tree()?;
 
     let mut visitor = SimpleVisitor::default();
 
@@ -48,12 +33,7 @@ pub fn suggest_config() -> eyre::Result<()> {
 
 pub fn print_untracked() -> eyre::Result<()> {
     let config = Config::load()?;
-
-    let mut tree = Tree::new();
-
-    add_systemd_tmpfiles(&mut tree)?;
-
-    config.add_to_tree(&mut tree)?;
+    let tree = config.to_tree()?;
 
     let mut visitor = SimpleVisitor::default();
 
