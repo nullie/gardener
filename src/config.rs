@@ -65,6 +65,16 @@ impl Config {
         Ok(serde_json::from_reader(buffered)?)
     }
 
+    /// Convert to tree, adding sytstemd-tmpfiles
+    pub fn to_tree(&self) -> eyre::Result<Tree<'_>> {
+        let mut tree = Tree::new();
+
+        self.add_to_tree(&mut tree)?;
+        declarative::tmpfiles::add_systemd_tmpfiles(&mut tree)?;
+
+        Ok(tree)
+    }
+
     pub fn add_to_tree<'a>(&'a self, tree: &mut Tree<'a>) -> eyre::Result<()> {
         for (path, path_type, path_properties) in self.paths() {
             tree.add_path(&path, path_type, path_properties)?;

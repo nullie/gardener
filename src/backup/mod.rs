@@ -13,18 +13,11 @@ use crate::{
 
 pub fn ls() -> Result<()> {
     let config = Config::load()?;
+    let tree = config.to_tree()?;
 
-    let mut tree = Tree::new();
+    file_visitor::Visitor::visit_fs(Path::new("/"), &tree, LsReporter)?;
 
-    add_systemd_tmpfiles(&mut tree)?;
-
-    config.add_to_tree(&mut tree)?;
-
-    fs::visit_dirs(
-        Path::new("/"),
-        &tree,
-        &mut file_visitor::Visitor::new(LsReporter),
-    )
+    Ok(())
 }
 
 struct LsReporter;
@@ -50,12 +43,7 @@ impl file_visitor::Reporter for LsReporter {
 
 pub fn size() -> Result<()> {
     let config = Config::load()?;
-
-    let mut tree = Tree::new();
-
-    add_systemd_tmpfiles(&mut tree)?;
-
-    config.add_to_tree(&mut tree)?;
+    let tree = config.to_tree()?;
 
     let reporter = file_visitor::Visitor::visit_fs(Path::new("/"), &tree, SizeReporter::new())?;
 
