@@ -34,55 +34,70 @@ pub fn visit_dirs<'a>(
     tree: &'a Tree<'a>,
     visitor: &mut impl Visitor<'a>,
 ) -> rootcause::Result<()> {
-    visit_dir(dir, Some(&tree.root), visitor)
+    visit_dir(dir, Some(&tree.root), visitor).map_err(rootcause::Report::from)
 }
 
 fn visit_dir<'a>(
     dir: &Path,
     maybe_tree_directory: Option<&'a BTreeMap<OsString, Node>>,
     visitor: &mut impl Visitor<'a>,
-) -> rootcause::Result<()> {
+) -> Result<(), std::io::Error> {
     match fs::read_dir(dir) {
         Ok(entries) => {
-            for entry in entries {
-                let entry = entry.unwrap();
-                let metadata = entry.metadata().unwrap();
-                let path = entry.path();
-                let file_type = PathType::new(entry.file_type().unwrap());
-                let maybe_tree_node = maybe_tree_directory
-                    .and_then(|tree_directory| tree_directory.get(entry.file_name().as_os_str()));
-                let maybe_properties =
-                    maybe_tree_node.and_then(|tree_node| tree_node.maybe_properties());
-                let maybe_children =
-                    maybe_tree_node.and_then(|tree_node| tree_node.maybe_children());
-                let maybe_expected_path_type = maybe_tree_node
-                    .map(|tree_node| PathType::from_declarative(tree_node.path_type()));
-
-                match file_type {
-                    PathType::Directory => {
-                        if visitor.visit_dir(
-                            path.clone(),
-                            maybe_expected_path_type,
-                            maybe_properties,
-                            maybe_children.is_some(),
-                        ) {
-                            visit_dir(&path, maybe_children, visitor)?;
-                        }
+            for entry_result in entries {
+                match entry_result {
+                    Ok(entry) => {
+                        match process_entry(&entry, maybe_tree_directory, visitor) {
+                            Ok(()) => (),
+                            Err(e) => visitor.visit_error(entry.path(), e),
+                        };
                     }
-                    file_type => {
-                        visitor.visit_file(
-                            path,
-                            file_type,
-                            metadata.len(),
-                            maybe_expected_path_type,
-                            maybe_properties,
-                        );
-                    }
+                    Err(e) => visitor.visit_error(dir.to_owned(), e),
                 }
             }
         }
         Err(e) => {
             visitor.visit_error(dir.to_owned(), e);
+        }
+    }
+
+    Ok(())
+}
+
+fn process_entry<'a>(
+    entry: &std::fs::DirEntry,
+    maybe_tree_directory: Option<&'a BTreeMap<OsString, Node>>,
+    visitor: &mut impl Visitor<'a>,
+) -> Result<(), std::io::Error> {
+    let metadata = entry.metadata()?;
+    let path = entry.path();
+    let file_type = PathType::new(entry.file_type()?);
+    let maybe_tree_node = maybe_tree_directory
+        .and_then(|tree_directory| tree_directory.get(entry.file_name().as_os_str()));
+    let maybe_properties = maybe_tree_node.and_then(|tree_node| tree_node.maybe_properties());
+    let maybe_children = maybe_tree_node.and_then(|tree_node| tree_node.maybe_children());
+    let maybe_expected_path_type =
+        maybe_tree_node.map(|tree_node| PathType::from_declarative(tree_node.path_type()));
+
+    match file_type {
+        PathType::Directory => {
+            if visitor.visit_dir(
+                path.clone(),
+                maybe_expected_path_type,
+                maybe_properties,
+                maybe_children.is_some(),
+            ) {
+                visit_dir(&path, maybe_children, visitor)?;
+            }
+        }
+        file_type => {
+            visitor.visit_file(
+                path,
+                file_type,
+                metadata.len(),
+                maybe_expected_path_type,
+                maybe_properties,
+            );
         }
     }
 
