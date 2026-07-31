@@ -1,4 +1,6 @@
 use clap::{Parser, Subcommand};
+use rootcause::hooks::Hooks;
+use rootcause_backtrace::BacktraceCollector;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -33,6 +35,12 @@ enum BackupSubcommand {
 }
 
 fn main() -> Result<(), rootcause::compat::MainReport> {
+    // Capture backtraces for all errors
+    Hooks::new()
+        .report_creation_hook(BacktraceCollector::new_from_env())
+        .install()
+        .expect("failed to install hooks");
+
     let cli = Cli::parse();
 
     match cli.command {
