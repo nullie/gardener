@@ -32,7 +32,7 @@ enum BackupSubcommand {
     Size,
 }
 
-fn main() -> eyre::Result<()> {
+fn main() -> Result<(), rootcause::compat::MainReport> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -50,5 +50,7 @@ fn main() -> eyre::Result<()> {
         Command::Backup {
             command: BackupSubcommand::Size,
         } => gardener::backup::size(),
-    }
+    }?;
+
+    Ok(())
 }

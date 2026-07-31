@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, ffi::OsString, path::Path};
 
 use crate::declarative::{self, FileType, PathType};
-use eyre::Context;
+use rootcause::prelude::ResultExt as _;
 use thiserror::Error;
 
 pub struct Tree<'a> {
@@ -91,13 +91,15 @@ impl<'a> Tree<'a> {
         path: &Path,
         path_type: declarative::PathType,
         properties: declarative::Properties<'a>,
-    ) -> eyre::Result<()> {
+    ) -> rootcause::Result<()> {
         self.add_path_by_components(
             Self::path_to_components(path)?.into_iter(),
             path_type,
             properties,
         )
-        .wrap_err_with(|| format!("path: {path:?}"))
+        .attach(format!("path: {path:?}"))?;
+
+        Ok(())
     }
 
     fn add_path_by_components(

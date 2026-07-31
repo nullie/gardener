@@ -2,7 +2,7 @@ mod file_visitor;
 
 use std::path::Path;
 
-use eyre::Result;
+use rootcause::Result;
 
 use crate::fs;
 use crate::{

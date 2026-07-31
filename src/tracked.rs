@@ -5,7 +5,7 @@ use crate::{
     declarative::{FileType, PathType},
 };
 
-pub fn check_tracked() -> eyre::Result<()> {
+pub fn check_tracked() -> rootcause::Result<()> {
     let config = Config::load()?;
 
     for (path, path_type, properties) in config.paths() {

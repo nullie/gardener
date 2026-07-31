@@ -4,7 +4,7 @@ use systemd_tmpfiles::Directive;
 
 use crate::declarative::{self, FileType, Owner, PathType, tree::Tree};
 
-pub fn add_systemd_tmpfiles(tree: &mut Tree) -> eyre::Result<()> {
+pub fn add_systemd_tmpfiles(tree: &mut Tree) -> rootcause::Result<()> {
     let owner = Owner::AdhocSystem {
         name: "systemd-tmpfiles",
     };

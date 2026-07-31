@@ -33,7 +33,7 @@ pub fn visit_dirs<'a>(
     dir: &Path,
     tree: &'a Tree<'a>,
     visitor: &mut impl Visitor<'a>,
-) -> eyre::Result<()> {
+) -> rootcause::Result<()> {
     visit_dir(dir, Some(&tree.root), visitor)
 }
 
@@ -41,7 +41,7 @@ fn visit_dir<'a>(
     dir: &Path,
     maybe_tree_directory: Option<&'a BTreeMap<OsString, Node>>,
     visitor: &mut impl Visitor<'a>,
-) -> eyre::Result<()> {
+) -> rootcause::Result<()> {
     match fs::read_dir(dir) {
         Ok(entries) => {
             for entry in entries {
