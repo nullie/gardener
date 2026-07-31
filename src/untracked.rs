@@ -3,9 +3,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use rootcause::Result;
+
 use crate::{config::Config, declarative, fs, presentation::UntrackedPath};
 
-pub fn check_untracked() -> eyre::Result<()> {
+pub fn check_untracked() -> Result<()> {
     let config = Config::load()?;
     let tree = config.to_tree()?;
 
@@ -18,7 +20,7 @@ pub fn check_untracked() -> eyre::Result<()> {
     Ok(())
 }
 
-pub fn suggest_config() -> eyre::Result<()> {
+pub fn suggest_config() -> Result<()> {
     let config = Config::load()?;
     let tree = config.to_tree()?;
 
@@ -31,7 +33,7 @@ pub fn suggest_config() -> eyre::Result<()> {
     Ok(())
 }
 
-pub fn print_untracked() -> eyre::Result<()> {
+pub fn print_untracked() -> Result<()> {
     let config = Config::load()?;
     let tree = config.to_tree()?;
 

@@ -4,9 +4,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::declarative::{self, FileType, PathType, StorageClass, tree::Tree};
-
 use serde::{Deserialize, Deserializer};
+
+use crate::declarative::{self, FileType, PathType, StorageClass, tree::Tree};
 
 fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
@@ -58,7 +58,7 @@ pub struct Paths {
 }
 
 impl Config {
-    pub fn load() -> eyre::Result<Self> {
+    pub fn load() -> rootcause::Result<Self> {
         let input = std::fs::File::open("/etc/gardener.json")?;
         let buffered = BufReader::new(input);
 
@@ -66,17 +66,16 @@ impl Config {
     }
 
     /// Convert to tree, adding sytstemd-tmpfiles
-    pub fn to_tree(&self) -> eyre::Result<Tree<'_>> {
+    pub fn to_tree(&self) -> rootcause::Result<Tree<'_>> {
         let mut tree = Tree::new();
 
-        // Reverse order triggers a bug: #5
-        declarative::tmpfiles::add_systemd_tmpfiles(&mut tree)?;
         self.add_to_tree(&mut tree)?;
+        declarative::tmpfiles::add_systemd_tmpfiles(&mut tree)?;
 
         Ok(tree)
     }
 
-    pub fn add_to_tree<'a>(&'a self, tree: &mut Tree<'a>) -> eyre::Result<()> {
+    pub fn add_to_tree<'a>(&'a self, tree: &mut Tree<'a>) -> rootcause::Result<()> {
         for (path, path_type, path_properties) in self.paths() {
             tree.add_path(&path, path_type, path_properties)?;
         }

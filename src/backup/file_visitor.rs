@@ -1,4 +1,4 @@
-use eyre::Result;
+use rootcause::Result;
 
 use crate::fs;
 
