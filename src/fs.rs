@@ -85,7 +85,7 @@ fn process_entry<'a>(
                 path.clone(),
                 maybe_expected_path_type,
                 maybe_properties,
-                maybe_children.is_some(),
+                maybe_children.is_some_and(|children| !children.is_empty()),
             ) {
                 visit_dir(&path, maybe_children, visitor)?;
             }
