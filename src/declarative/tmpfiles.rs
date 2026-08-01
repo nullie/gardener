@@ -38,15 +38,15 @@ pub fn add_systemd_tmpfiles(tree: &mut Tree) -> rootcause::Result<()> {
             // FIXME: return error
             assert!(!entry.path_is_glob());
 
-            tree.add_path(
-                Path::new(entry.path()),
-                path_type,
-                declarative::Properties {
-                    owner,
-                    storage_class: declarative::StorageClass::Ephemeral,
-                },
-            )?;
-        }
+            let path = Path::new(entry.path());
+            let properties = declarative::Properties {
+                owner,
+                storage_class: declarative::StorageClass::Ephemeral,
+            };
+
+            tree.add_path(path, path_type, properties)
+                .map_err(|e| rootcause::report!(e.to_string()).attach(format!("path: {path:?}")))?;
+        };
     }
 
     Ok(())

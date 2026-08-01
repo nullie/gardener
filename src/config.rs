@@ -4,6 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use rootcause::prelude::ResultExt;
 use serde::{Deserialize, Deserializer};
 
 use crate::declarative::{self, FileType, PathType, StorageClass, tree::Tree};
@@ -69,15 +70,17 @@ impl Config {
     pub fn to_tree(&self) -> rootcause::Result<Tree<'_>> {
         let mut tree = Tree::new();
 
-        self.add_to_tree(&mut tree)?;
-        declarative::tmpfiles::add_systemd_tmpfiles(&mut tree)?;
+        self.add_to_tree(&mut tree)
+            .context("failed adding config paths")?;
+        declarative::tmpfiles::add_systemd_tmpfiles(&mut tree).context("failed adding tmpfiles")?;
 
         Ok(tree)
     }
 
     pub fn add_to_tree<'a>(&'a self, tree: &mut Tree<'a>) -> rootcause::Result<()> {
         for (path, path_type, path_properties) in self.paths() {
-            tree.add_path(&path, path_type, path_properties)?;
+            tree.add_path(&path, path_type, path_properties)
+                .map_err(|e| rootcause::report!(e.to_string()))?;
         }
 
         Ok(())

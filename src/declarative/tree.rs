@@ -1,7 +1,6 @@
 use std::{collections::BTreeMap, ffi::OsString, path::Path};
 
 use crate::declarative::{self, FileType, PathType};
-use rootcause::prelude::ResultExt as _;
 use thiserror::Error;
 
 pub struct Tree<'a> {
@@ -65,7 +64,7 @@ impl<'a> Tree<'a> {
         }
     }
 
-    fn path_to_components(path: &Path) -> Result<Vec<OsString>, TreeError> {
+    fn path_to_components<'b>(path: &Path) -> Result<Vec<OsString>, TreeError<'a, 'b>> {
         let mut components = path.components();
 
         if components.next() != Some(std::path::Component::RootDir) {
@@ -87,15 +86,12 @@ impl<'a> Tree<'a> {
         path: &Path,
         path_type: declarative::PathType,
         properties: declarative::Properties<'a>,
-    ) -> rootcause::Result<()> {
+    ) -> Result<(), TreeError<'a, '_>> {
         self.add_path_by_components(
             Self::path_to_components(path)?.into_iter(),
             path_type,
             properties,
         )
-        .attach(format!("path: {path:?}"))?;
-
-        Ok(())
     }
 
     fn add_path_by_components(
@@ -103,7 +99,7 @@ impl<'a> Tree<'a> {
         mut components: impl DoubleEndedIterator<Item = OsString>,
         path_type: declarative::PathType,
         properties: declarative::Properties<'a>,
-    ) -> Result<(), TreeError> {
+    ) -> Result<(), TreeError<'a, '_>> {
         let mut directory = &mut self.root;
 
         let Some(last_component) = components.next_back() else {
@@ -136,8 +132,8 @@ impl<'a> Tree<'a> {
                 match (occupied, path_type) {
                     (Node::Directory(maybe_properties, _), PathType::Directory) => {
                         match maybe_properties {
-                            Some(_properties) => {
-                                return Err(TreeError::OverlappingPath);
+                            Some(existing_properties) => {
+                                return Err(TreeError::ExistingProperties(existing_properties));
                             }
                             None => {
                                 *maybe_properties = Some(properties);
@@ -161,9 +157,11 @@ impl<'a> Tree<'a> {
 }
 
 #[derive(Error, Debug)]
-enum TreeError {
+pub enum TreeError<'a, 'b> {
     #[error("path is empty")]
     EmptyPath,
+    #[error("conflicting properties: {0:?}")]
+    ExistingProperties(&'b mut declarative::Properties<'a>),
     #[error("path is overlapping")]
     OverlappingPath,
     #[error("unexpected component")]
