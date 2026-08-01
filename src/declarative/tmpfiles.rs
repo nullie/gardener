@@ -45,7 +45,14 @@ pub fn add_systemd_tmpfiles(tree: &mut Tree) -> rootcause::Result<()> {
             };
 
             tree.add_path(path, path_type, properties)
-                .map_err(|e| rootcause::report!(e.to_string()).attach(format!("path: {path:?}")))?;
+                .or_else(|tree_error| match tree_error {
+                    declarative::tree::TreeError::ExistingProperties(_existing_properties) => {
+                        // systemd-tmpfiles are added after declared ones and should not
+                        // override them
+                        Ok(())
+                    }
+                    e => Err(rootcause::report!(e.to_string()).attach(format!("path: {path:?}"))),
+                })?;
         };
     }
 
