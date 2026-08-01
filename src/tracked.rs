@@ -15,9 +15,7 @@ pub fn check_tracked() -> rootcause::Result<()> {
 
         let err_message = match path.symlink_metadata() {
             Ok(metadata) => (match path_type {
-                PathType::OpenDirectory | PathType::ClosedDirectory => {
-                    (!metadata.is_dir()).then_some("not a directory")
-                }
+                PathType::Directory => (!metadata.is_dir()).then_some("not a directory"),
                 PathType::File(FileType::Regular) => (!metadata.is_file()).then_some("not a file"),
                 PathType::File(FileType::Symlink) => {
                     (!metadata.is_symlink()).then_some("not a symlink")

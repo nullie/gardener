@@ -150,7 +150,7 @@ fn path_set_to_paths<'a>(
     properties: declarative::Properties<'a>,
 ) -> impl Iterator<Item = (&'a Path, PathType, declarative::Properties<'a>)> {
     [
-        (&path_set.directories, PathType::ClosedDirectory),
+        (&path_set.directories, PathType::Directory),
         (&path_set.files, PathType::File(FileType::Regular)),
         (&path_set.symlinks, PathType::File(FileType::Symlink)),
     ]

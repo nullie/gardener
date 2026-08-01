@@ -29,7 +29,7 @@ pub fn add_systemd_tmpfiles(tree: &mut Tree) -> rootcause::Result<()> {
             Directive::CreateCharDeviceNode { .. } => Some(PathType::File(FileType::CharDevice)),
             Directive::CreateBlockDeviceNode { .. } => Some(PathType::File(FileType::BlockDevice)),
             Directive::CreateDirectory { .. } | Directive::CreateSubvolume { .. } => {
-                Some(PathType::OpenDirectory)
+                Some(PathType::Directory)
             }
             _ => None,
         };

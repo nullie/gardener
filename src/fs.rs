@@ -126,9 +126,7 @@ impl PathType {
 
     pub fn from_declarative(path_type: declarative::PathType) -> Self {
         match path_type {
-            declarative::PathType::OpenDirectory | declarative::PathType::ClosedDirectory => {
-                Self::Directory
-            }
+            declarative::PathType::Directory => Self::Directory,
             declarative::PathType::File(file_type) => Self::File(file_type),
         }
     }

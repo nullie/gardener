@@ -3,8 +3,7 @@ pub mod tree;
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum PathType {
-    OpenDirectory,
-    ClosedDirectory,
+    Directory,
     File(FileType),
 }
 
