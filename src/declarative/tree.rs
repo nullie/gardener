@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeMap, btree_map},
-    ffi::{OsStr, OsString},
+    ffi::OsString,
     path::Path,
 };
 
@@ -85,7 +85,10 @@ impl<'a> Node<'a> {
 
 impl<'a> NodeKind<'a> {
     fn get_properties(&self) -> Option<Properties<'a>> {
-        todo!()
+        match *self {
+            NodeKind::Empty(maybe_properties) => maybe_properties,
+            NodeKind::OwnsContents(properties) => Some(properties),
+        }
     }
 }
 
@@ -167,6 +170,9 @@ impl<'a> Tree<'a> {
             }
         }
 
+        // The cycle above should only complete by consuming all components
+        assert!(components.next().is_none());
+
         match directory.entry(last_component) {
             btree_map::Entry::Vacant(vacant) => {
                 vacant.insert(Node::new(path_type, properties));
@@ -177,8 +183,8 @@ impl<'a> Tree<'a> {
                 let occupied = occupied.into_mut();
 
                 match (occupied, path_type) {
-                    (Node::Directory { children, kind }, PathType::Directory { owns_contents }) => {
-                        Self::merge_dirs(children, kind, components, owns_contents, properties)
+                    (Node::Directory { kind, .. }, PathType::Directory { owns_contents }) => {
+                        Self::merge_dirs(kind, owns_contents, properties)
                     }
                     (occupied, path_type) => {
                         let existing_path_type = occupied.path_type();
@@ -196,43 +202,65 @@ impl<'a> Tree<'a> {
 
     fn insert_into_vacant<'b>(
         vacant_entry: btree_map::VacantEntry<'b, OsString, Node<'a>>,
-        mut components: impl DoubleEndedIterator<Item = OsString>,
+        remaining_intermediate: impl DoubleEndedIterator<Item = OsString>,
         last_component: OsString,
         path_type: declarative::PathType,
         properties: declarative::Properties<'a>,
     ) -> Result<(), TreeError<'a, 'b>> {
-        let mut node = vacant_entry.insert(Node::intermediate());
+        let Node::Directory { children, .. } = vacant_entry.insert(Node::intermediate()) else {
+            unreachable!();
+        };
 
-        for component in components {
-            let Node::Directory { children, kind } = node else {
+        let mut directory = children;
+
+        for component in remaining_intermediate {
+            let Node::Directory { children, .. } = directory
+                .entry(component)
+                .insert_entry(Node::intermediate())
+                .into_mut()
+            else {
                 unreachable!()
             };
 
-            node = children
-                .entry(component)
-                .insert_entry(Node::intermediate())
-                .into_mut();
+            directory = children;
         }
 
-        todo!()
+        assert!(
+            directory
+                .insert(last_component, Node::new(path_type, properties))
+                .is_none()
+        );
+
+        Ok(())
     }
 
     fn merge_dirs<'b>(
-        children: &'b mut BTreeMap<OsString, Node<'a>>,
-        kind: &'b mut NodeKind<'a>,
-        mut components: impl DoubleEndedIterator<Item = OsString>,
+        existing_kind: &'b mut NodeKind<'a>,
         owns_contents: bool,
         properties: declarative::Properties<'a>,
     ) -> Result<(), TreeError<'a, 'b>> {
-        todo!()
-        // match maybe_properties {
-        //     Some(existing_properties) => {
-        //         return Err(TreeError::ExistingProperties(existing_properties));
-        //     }
-        //     None => {
-        //         *maybe_properties = Some(properties);
-        //     }
-        // }
+        if matches!(
+            existing_kind,
+            NodeKind::OwnsContents(_) | NodeKind::Empty(Some(_))
+        ) {
+            match existing_kind {
+                NodeKind::OwnsContents(existing_properties) => {
+                    return Err(TreeError::ExistingProperties(existing_properties));
+                }
+                NodeKind::Empty(maybe_properties) => match maybe_properties {
+                    Some(existing_properties) => {
+                        return Err(TreeError::ExistingProperties(existing_properties));
+                    }
+                    None => unreachable!(),
+                },
+            }
+        }
+
+        if owns_contents {
+            *existing_kind = NodeKind::OwnsContents(properties);
+        }
+
+        Ok(())
     }
 }
 

@@ -188,8 +188,6 @@ impl<'a> fs::Visitor<'a> for SimpleVisitor<'a> {
         if let Some((declared_path_type, maybe_properties)) = maybe_declared {
             match declared_path_type {
                 declarative::PathType::Directory { owns_contents } => {
-                    dbg!(&path, &maybe_declared, owns_contents);
-
                     if let Some(properties) = maybe_properties {
                         // If not enabled, then it's untracked
                         if !properties.owner.enabled() {
