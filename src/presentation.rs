@@ -1,19 +1,19 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::{declarative, fs};
 
-pub struct UntrackedPath {
-    pub path: PathBuf,
+pub struct UntrackedPath<P: AsRef<Path>> {
+    pub path: P,
     pub path_type: fs::PathType,
 }
 
-impl UntrackedPath {
-    pub fn new(path: PathBuf, path_type: fs::PathType) -> Self {
+impl<P: AsRef<Path>> UntrackedPath<P> {
+    pub fn new(path: P, path_type: fs::PathType) -> Self {
         Self { path, path_type }
     }
 }
 
-impl std::fmt::Display for UntrackedPath {
+impl<P: AsRef<Path>> std::fmt::Display for UntrackedPath<P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let type_symbol = match &self.path_type {
             fs::PathType::Directory => 'd',
@@ -30,6 +30,6 @@ impl std::fmt::Display for UntrackedPath {
             },
         };
 
-        write!(f, "{} {}", type_symbol, self.path.display())
+        write!(f, "{} {}", type_symbol, self.path.as_ref().display())
     }
 }

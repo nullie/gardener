@@ -1,5 +1,6 @@
 use std::{
     collections::BTreeMap,
+    ops::ControlFlow,
     path::{Path, PathBuf},
 };
 
@@ -11,7 +12,7 @@ pub fn check_untracked() -> Result<()> {
     let config = Config::load()?;
     let tree = config.to_tree()?;
 
-    let mut visitor = SimpleVisitor::default();
+    let mut visitor = UntrackedVisitor::default();
 
     fs::walk_tree(Path::new("/"), &tree, &mut visitor)?;
 
@@ -24,7 +25,7 @@ pub fn suggest_config() -> Result<()> {
     let config = Config::load()?;
     let tree = config.to_tree()?;
 
-    let mut visitor = SimpleVisitor::default();
+    let mut visitor = UntrackedVisitor::default();
 
     fs::walk_tree(Path::new("/"), &tree, &mut visitor)?;
 
@@ -37,7 +38,7 @@ pub fn print_untracked() -> Result<()> {
     let config = Config::load()?;
     let tree = config.to_tree()?;
 
-    let mut visitor = SimpleVisitor::default();
+    let mut visitor = UntrackedVisitor::default();
 
     fs::walk_tree(Path::new("/"), &tree, &mut visitor)?;
 
@@ -47,12 +48,12 @@ pub fn print_untracked() -> Result<()> {
 }
 
 #[derive(Default)]
-struct SimpleVisitor<'a> {
-    untracked: Vec<UntrackedPath>,
-    tracked_by_disabled_module: BTreeMap<declarative::Owner<'a>, Vec<UntrackedPath>>,
+struct UntrackedVisitor<'a> {
+    untracked: Vec<UntrackedPath<PathBuf>>,
+    tracked_by_disabled_module: BTreeMap<declarative::Owner<'a>, Vec<UntrackedPath<PathBuf>>>,
 }
 
-impl<'a> SimpleVisitor<'a> {
+impl<'a> UntrackedVisitor<'a> {
     fn print_untracked(&self) {
         for untracked_path in &self.untracked {
             println!("{}", untracked_path.path.display());
@@ -143,25 +144,31 @@ impl<'a> SimpleVisitor<'a> {
         println!("}};");
     }
 
-    fn report_untracked_path<'b: 'a>(
-        &mut self,
-        path: PathBuf,
-        maybe_properties: Option<declarative::Properties<'b>>,
+    fn report_untracked_path<'b, 'c>(
+        &'b mut self,
+        path: &'c Path,
+        maybe_properties: Option<declarative::Properties<'a>>,
         path_type: fs::PathType,
     ) {
         if let Some(properties) = maybe_properties {
             self.tracked_by_disabled_module
                 .entry(properties.owner)
                 .or_default()
-                .push(UntrackedPath { path, path_type });
+                .push(UntrackedPath {
+                    path: path.to_owned(),
+                    path_type,
+                });
         } else {
-            self.untracked.push(UntrackedPath { path, path_type });
+            self.untracked.push(UntrackedPath {
+                path: path.to_owned(),
+                path_type,
+            });
         }
     }
 
     fn report_mismatching_path(
         &mut self,
-        path: PathBuf,
+        path: &Path,
         maybe_properties: Option<declarative::Properties<'_>>,
         expected: fs::PathType,
         found: fs::PathType,
@@ -173,81 +180,117 @@ impl<'a> SimpleVisitor<'a> {
             path.display()
         );
     }
+
+    fn check_path<'b, 'c>(
+        &'b mut self,
+        entry: fs::Entry<'a, 'c>,
+        path_type: fs::PathType,
+    ) -> ControlFlow<(), ()> {
+        if let Some(declared_path_type) = entry.maybe_path_type {
+            let expected_path_type = fs::PathType::from(declared_path_type);
+
+            if expected_path_type != path_type {
+                self.report_mismatching_path(
+                    entry.path,
+                    entry.maybe_properties,
+                    expected_path_type,
+                    path_type,
+                );
+
+                return ControlFlow::Break(());
+            }
+        }
+
+        if entry
+            .maybe_properties
+            .is_none_or(|properties| !properties.owner.enabled())
+        {
+            self.report_untracked_path(entry.path, entry.maybe_properties, path_type);
+
+            return ControlFlow::Break(());
+        }
+
+        ControlFlow::Continue(())
+    }
 }
 
-impl<'a> fs::Visitor<'a> for SimpleVisitor<'a> {
+impl<'a> fs::Visitor<'a> for UntrackedVisitor<'a> {
     fn visit_dir(
         &mut self,
-        path: PathBuf,
-        maybe_declared: std::option::Option<(
-            declarative::PathType,
-            std::option::Option<declarative::Properties<'a>>,
-        )>,
+        entry: fs::Entry<'a, '_>,
         _has_declared_children: bool,
-    ) -> bool {
-        if let Some((declared_path_type, maybe_properties)) = maybe_declared {
+    ) -> ControlFlow<(), ()> {
+        self.check_path(entry, fs::PathType::Directory)?;
+
+        if let Some(declared_path_type) = entry.maybe_path_type {
             match declared_path_type {
                 declarative::PathType::Directory { owns_contents } => {
-                    if let Some(properties) = maybe_properties {
+                    if let Some(properties) = entry.maybe_properties {
                         // If not enabled, then it's untracked
                         if !properties.owner.enabled() {
                             self.report_untracked_path(
-                                path,
-                                maybe_properties,
+                                entry.path,
+                                entry.maybe_properties,
                                 fs::PathType::Directory,
                             );
 
-                            false
+                            ControlFlow::Break(())
+                        } else if !owns_contents {
+                            // Recurse to discover untracked files
+                            ControlFlow::Continue(())
                         } else {
-                            // Recurse if not owns content
-                            !owns_contents
+                            // Owns everything, everything is tracked
+                            ControlFlow::Break(())
                         }
                     } else {
-                        true
+                        ControlFlow::Break(())
                     }
                 }
                 declarative::PathType::File(_) => {
                     self.report_mismatching_path(
-                        path,
-                        maybe_properties,
+                        entry.path,
+                        entry.maybe_properties,
                         declared_path_type.into(),
                         fs::PathType::Directory,
                     );
 
-                    false
+                    ControlFlow::Break(())
                 }
             }
         } else {
-            self.report_untracked_path(path, None, fs::PathType::Directory);
-            false
+            self.report_untracked_path(entry.path, None, fs::PathType::Directory);
+            ControlFlow::Break(())
         }
     }
 
-    fn visit_file(
-        &mut self,
-        path: PathBuf,
-        file_type: fs::FileType,
-        _len: u64,
-        maybe_declared: std::option::Option<(
-            declarative::PathType,
-            std::option::Option<declarative::Properties<'a>>,
-        )>,
-    ) {
-        if let Some((declared_path_type, maybe_properties)) = maybe_declared {
+    fn visit_file(&mut self, entry: fs::Entry<'a, '_>, file_type: fs::FileType, _len: u64) {
+        if let Some(declared_path_type) = entry.maybe_path_type {
             let expected_path_type = fs::PathType::from(declared_path_type);
             let path_type = fs::PathType::from(file_type);
 
             if expected_path_type != path_type {
-                self.report_mismatching_path(path, maybe_properties, expected_path_type, path_type);
-            } else if maybe_properties.is_none_or(|properties| !properties.owner.enabled()) {
-                self.report_untracked_path(path, maybe_properties, path_type);
+                self.report_mismatching_path(
+                    entry.path,
+                    entry.maybe_properties,
+                    expected_path_type,
+                    path_type,
+                );
             }
-        } else {
-            self.report_untracked_path(path, None, file_type.into());
+        }
+
+        if entry
+            .maybe_properties
+            .is_none_or(|properties| !properties.owner.enabled())
+        {
+            self.report_untracked_path(
+                entry.path,
+                entry.maybe_properties,
+                fs::PathType::from(file_type),
+            );
         }
     }
 
-    fn visit_error(&mut self, dir: PathBuf, e: std::io::Error) {
+    fn visit_error(&mut self, dir: &Path, e: std::io::Error) {
         eprintln!("Failed to read directory {:?}: {}", dir, e);
     }
 }

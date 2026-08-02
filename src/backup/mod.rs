@@ -21,7 +21,7 @@ struct LsReporter;
 impl file_visitor::Reporter for LsReporter {
     fn report_file(
         &mut self,
-        path: std::path::PathBuf,
+        path: &std::path::Path,
         file_type: fs::FileType,
         len: u64,
         maybe_properties: Option<crate::declarative::Properties>,
@@ -64,7 +64,7 @@ impl SizeReporter {
 impl file_visitor::Reporter for SizeReporter {
     fn report_file(
         &mut self,
-        _path: std::path::PathBuf,
+        _path: &std::path::Path,
         _file_type: fs::FileType,
         len: u64,
         _maybe_properties: Option<crate::declarative::Properties>,

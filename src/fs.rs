@@ -1,9 +1,6 @@
 use std::{
-    collections::BTreeMap,
-    ffi::OsString,
-    fs,
-    os::unix::fs::FileTypeExt,
-    path::{Path, PathBuf},
+    collections::BTreeMap, ffi::OsString, fs, ops::ControlFlow, os::unix::fs::FileTypeExt,
+    path::Path,
 };
 
 use crate::declarative::{
@@ -14,18 +11,19 @@ use crate::declarative::{
 pub trait Visitor<'a> {
     fn visit_dir(
         &mut self,
-        path: PathBuf,
-        maybe_declared: Option<(declarative::PathType, Option<declarative::Properties<'a>>)>,
+        declared: Entry<'a, '_>,
         has_declared_children: bool,
-    ) -> bool;
-    fn visit_file(
-        &mut self,
-        path: PathBuf,
-        file_type: FileType,
-        len: u64,
-        maybe_declared: Option<(declarative::PathType, Option<declarative::Properties<'a>>)>,
-    );
-    fn visit_error(&mut self, dir: PathBuf, e: std::io::Error);
+    ) -> ControlFlow<(), ()>;
+    fn visit_file(&mut self, declared: Entry<'a, '_>, file_type: FileType, len: u64);
+    fn visit_error(&mut self, dir: &Path, e: std::io::Error);
+}
+
+// TODO: move to declared
+#[derive(Debug, Clone, Copy)]
+pub struct Entry<'a, 'b> {
+    pub path: &'b Path,
+    pub maybe_path_type: Option<declarative::PathType>,
+    pub maybe_properties: Option<declarative::Properties<'a>>,
 }
 
 pub fn walk_tree<'a>(
@@ -54,15 +52,15 @@ fn walk_dir<'a>(
                             visitor,
                         ) {
                             Ok(()) => (),
-                            Err(e) => visitor.visit_error(entry.path(), e),
+                            Err(e) => visitor.visit_error(&entry.path(), e),
                         };
                     }
-                    Err(e) => visitor.visit_error(dir.to_owned(), e),
+                    Err(e) => visitor.visit_error(dir, e),
                 }
             }
         }
         Err(e) => {
-            visitor.visit_error(dir.to_owned(), e);
+            visitor.visit_error(dir, e);
         }
     }
 
@@ -80,39 +78,47 @@ fn process_entry<'a>(
     let path_type = PathType::from(entry.file_type()?);
     let maybe_tree_node = maybe_tree_directory
         .and_then(|tree_directory| tree_directory.get(entry.file_name().as_os_str()));
-    let maybe_declared =
-        maybe_tree_node.map(|tree_node| (tree_node.path_type(), tree_node.get_properties()));
 
-    let maybe_properties = maybe_tree_node
+    let maybe_declared_properties = maybe_tree_node
         .and_then(|tree_node| tree_node.get_properties())
         .or(inherited_properties);
+
+    let maybe_declared_path_type = maybe_tree_node.map(|tree_node| tree_node.path_type());
+    let entry = Entry {
+        path: &path,
+        maybe_path_type: maybe_declared_path_type,
+        maybe_properties: maybe_declared_properties,
+    };
+
     let maybe_children = maybe_tree_node.and_then(|tree_node| tree_node.get_children());
 
     match path_type {
         PathType::Directory => {
-            if visitor.visit_dir(
-                path.clone(),
-                maybe_declared,
-                maybe_children.is_some_and(|children| !children.is_empty()),
-            ) {
-                walk_dir(&path, maybe_children, maybe_properties, visitor)?;
+            if visitor
+                .visit_dir(
+                    entry,
+                    maybe_children.is_some_and(|children| !children.is_empty()),
+                )
+                .is_continue()
+            {
+                walk_dir(&path, maybe_children, maybe_declared_properties, visitor)?;
             }
         }
         PathType::File(file_type) => {
-            visitor.visit_file(path, file_type, metadata.len(), maybe_declared);
+            visitor.visit_file(entry, file_type, metadata.len());
         }
     }
 
     Ok(())
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum FileType {
     Declarative(declarative::FileType),
     Other(fs::FileType),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum PathType {
     Directory,
     File(FileType),
