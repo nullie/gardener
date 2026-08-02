@@ -3,7 +3,7 @@ pub mod tree;
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum PathType {
-    Directory,
+    Directory { owns_contents: bool },
     File(FileType),
 }
 

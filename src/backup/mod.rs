@@ -22,16 +22,16 @@ impl file_visitor::Reporter for LsReporter {
     fn report_file(
         &mut self,
         path: std::path::PathBuf,
-        file_type: fs::PathType,
+        file_type: fs::FileType,
         len: u64,
         maybe_properties: Option<crate::declarative::Properties>,
     ) {
         if maybe_properties.is_none_or(|properties| properties.storage_class.should_backup()) {
             println!(
                 "{}: {} {:?}",
-                UntrackedPath::new(path, file_type),
+                UntrackedPath::new(path, fs::PathType::File(file_type)),
                 len,
-                maybe_properties.map(|properties| properties.owner)
+                maybe_properties
             );
         }
     }
@@ -65,7 +65,7 @@ impl file_visitor::Reporter for SizeReporter {
     fn report_file(
         &mut self,
         _path: std::path::PathBuf,
-        _file_type: fs::PathType,
+        _file_type: fs::FileType,
         len: u64,
         _maybe_properties: Option<crate::declarative::Properties>,
     ) {
