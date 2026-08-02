@@ -81,12 +81,12 @@ fn process_entry<'a>(
     let maybe_tree_node = maybe_tree_directory
         .and_then(|tree_directory| tree_directory.get(entry.file_name().as_os_str()));
     let maybe_declared =
-        maybe_tree_node.map(|tree_node| (tree_node.path_type(), tree_node.maybe_properties()));
+        maybe_tree_node.map(|tree_node| (tree_node.path_type(), tree_node.get_properties()));
 
     let maybe_properties = maybe_tree_node
-        .and_then(|tree_node| tree_node.maybe_properties())
+        .and_then(|tree_node| tree_node.get_properties())
         .or(inherited_properties);
-    let maybe_children = maybe_tree_node.and_then(|tree_node| tree_node.maybe_children());
+    let maybe_children = maybe_tree_node.and_then(|tree_node| tree_node.get_children());
 
     match path_type {
         PathType::Directory => {

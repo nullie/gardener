@@ -1,6 +1,10 @@
-use std::{collections::BTreeMap, ffi::OsString, path::Path};
+use std::{
+    collections::{BTreeMap, btree_map},
+    ffi::{OsStr, OsString},
+    path::Path,
+};
 
-use crate::declarative::{self, FileType, PathType};
+use crate::declarative::{self, FileType, PathType, Properties};
 use thiserror::Error;
 
 pub struct Tree<'a> {
@@ -11,42 +15,70 @@ pub type Children<'a> = BTreeMap<OsString, Node<'a>>;
 
 #[derive(Debug)]
 pub enum Node<'a> {
-    Directory(Option<declarative::Properties<'a>>, Children<'a>),
-    File(declarative::Properties<'a>, FileType),
+    Directory {
+        children: Children<'a>,
+        kind: NodeKind<'a>,
+    },
+    File {
+        file_type: FileType,
+        properties: declarative::Properties<'a>,
+    },
+}
+
+#[derive(Debug)]
+pub enum NodeKind<'a> {
+    OwnsContents(declarative::Properties<'a>),
+    Empty(Option<declarative::Properties<'a>>),
 }
 
 impl<'a> Node<'a> {
     fn new(path_type: declarative::PathType, properties: declarative::Properties<'a>) -> Self {
         match path_type {
-            PathType::Directory => Node::Directory(Some(properties), BTreeMap::new()),
-            PathType::File(file_type) => Node::File(properties, file_type),
+            PathType::Directory { owns_contents } => Node::Directory {
+                children: BTreeMap::new(),
+                kind: if owns_contents {
+                    NodeKind::OwnsContents(properties)
+                } else {
+                    NodeKind::Empty(Some(properties))
+                },
+            },
+            PathType::File(file_type) => Node::File {
+                file_type,
+                properties,
+            },
         }
     }
 
-    pub fn maybe_children(&'a self) -> Option<&'a Children<'a>> {
+    pub fn get_children(&'a self) -> Option<&'a Children<'a>> {
         match self {
-            Node::Directory(_, children) => Some(children),
+            Node::Directory { children, .. } => Some(children),
             _ => None,
         }
     }
 
     pub fn path_type(&self) -> PathType {
         match self {
-            Node::Directory(_, _) => PathType::Directory,
-            Node::File(_, declared_file_type) => PathType::File(*declared_file_type),
+            Node::Directory { kind, .. } => PathType::Directory {
+                owns_contents: match kind {
+                    NodeKind::OwnsContents(_) => true,
+                    NodeKind::Empty(_) => false,
+                },
+            },
+            Node::File { file_type, .. } => PathType::File(*file_type),
         }
     }
 
-    pub fn maybe_properties(&self) -> Option<declarative::Properties<'a>> {
-        let maybe_properties = match self {
-            Node::Directory(maybe_properties, _) => maybe_properties.as_ref(),
-            Node::File(properties, _) => Some(properties),
-        };
+    pub fn get_properties(&self) -> Option<declarative::Properties<'a>> {
+        match self {
+            Node::Directory { kind, .. } => kind.get_properties(),
+            Node::File { properties, .. } => Some(*properties),
+        }
+    }
+}
 
-        maybe_properties.map(|properties| declarative::Properties {
-            owner: properties.owner,
-            storage_class: properties.storage_class,
-        })
+impl<'a> NodeKind<'a> {
+    fn get_properties(&self) -> Option<Properties<'a>> {
+        todo!()
     }
 }
 
@@ -106,46 +138,51 @@ impl<'a> Tree<'a> {
             return Err(TreeError::EmptyPath);
         };
 
-        for component in components {
-            let entry = directory
-                .entry(component)
-                .or_insert_with(|| Node::Directory(None, BTreeMap::new()));
+        for component in &mut components {
+            let entry = directory.entry(component);
 
             match entry {
-                Node::Directory(_, d) => {
-                    directory = d;
+                btree_map::Entry::Vacant(vacant_entry) => {
+                    return Self::insert_into_vacant(
+                        vacant_entry,
+                        components,
+                        path_type,
+                        properties,
+                    );
                 }
-                Node::File(..) => {
-                    // Swallow directories below closed
-                    return Ok(());
-                }
+                btree_map::Entry::Occupied(occupied_entry) => match occupied_entry.into_mut() {
+                    Node::Directory { children, .. } => {
+                        directory = children;
+                    }
+                    Node::File { .. } => return Err(TreeError::ConflictingPathType),
+                },
             }
         }
 
         match directory.entry(last_component) {
-            std::collections::btree_map::Entry::Vacant(vacant) => {
+            btree_map::Entry::Vacant(vacant) => {
                 vacant.insert(Node::new(path_type, properties));
             }
-            std::collections::btree_map::Entry::Occupied(occupied) => {
+            btree_map::Entry::Occupied(occupied) => {
                 let occupied = occupied.into_mut();
 
                 match (occupied, path_type) {
-                    (Node::Directory(maybe_properties, _), PathType::Directory) => {
-                        match maybe_properties {
-                            Some(existing_properties) => {
-                                return Err(TreeError::ExistingProperties(existing_properties));
-                            }
-                            None => {
-                                *maybe_properties = Some(properties);
-                            }
-                        }
+                    (Node::Directory { children, kind }, PathType::Directory { owns_contents }) => {
+                        Self::merge_occupied_dir(children, kind, components, path_type, properties);
+                        todo!()
+                        // match maybe_properties {
+                        //     Some(existing_properties) => {
+                        //         return Err(TreeError::ExistingProperties(existing_properties));
+                        //     }
+                        //     None => {
+                        //         *maybe_properties = Some(properties);
+                        //     }
                     }
                     (occupied, path_type) => {
                         let existing_path_type = occupied.path_type();
 
                         if existing_path_type != path_type {
-                            // TODO: conflicting path
-                            return Err(TreeError::OverlappingPath);
+                            return Err(TreeError::ConflictingPathType);
                         }
                     }
                 }
@@ -153,6 +190,33 @@ impl<'a> Tree<'a> {
         }
 
         Ok(())
+    }
+
+    fn insert_into_vacant<'b>(
+        vacant_entry: btree_map::VacantEntry<'b, OsString, Node<'a>>,
+        mut components: impl DoubleEndedIterator<Item = OsString>,
+        path_type: declarative::PathType,
+        properties: declarative::Properties<'a>,
+    ) -> Result<(), TreeError<'a, 'b>> {
+        todo!()
+    }
+
+    fn merge_occupied_dir<'b>(
+        children: &'b mut BTreeMap<OsString, Node<'a>>,
+        kind: &'b mut NodeKind<'a>,
+        mut components: impl DoubleEndedIterator<Item = OsString>,
+        path_type: declarative::PathType,
+        properties: declarative::Properties<'a>,
+    ) -> Result<(), TreeError<'a, 'b>> {
+        todo!()
+        // match maybe_properties {
+        //     Some(existing_properties) => {
+        //         return Err(TreeError::ExistingProperties(existing_properties));
+        //     }
+        //     None => {
+        //         *maybe_properties = Some(properties);
+        //     }
+        // }
     }
 }
 
@@ -163,7 +227,7 @@ pub enum TreeError<'a, 'b> {
     #[error("conflicting properties: {0:?}")]
     ExistingProperties(&'b mut declarative::Properties<'a>),
     #[error("path is overlapping")]
-    OverlappingPath,
+    ConflictingPathType,
     #[error("unexpected component")]
     UnexpectedPathComponent(String),
 }
