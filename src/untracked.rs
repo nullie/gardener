@@ -196,10 +196,12 @@ impl<'a> fs::Visitor<'a> for SimpleVisitor<'a> {
                                 maybe_properties,
                                 fs::PathType::Directory,
                             );
-                        }
 
-                        // If enabled, don't recurse
-                        false
+                            false
+                        } else {
+                            // Recurse if not owns content
+                            !owns_contents
+                        }
                     } else {
                         true
                     }
