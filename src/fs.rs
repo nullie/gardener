@@ -1,15 +1,8 @@
-use std::{
-    collections::BTreeMap,
-    ffi::OsString,
-    fs,
-    ops::ControlFlow,
-    os::unix::fs::FileTypeExt,
-    path::Path,
-};
+use std::{fs, ops::ControlFlow, os::unix::fs::FileTypeExt, path::Path};
 
 use crate::declarative::{
-    tree::{Node, Tree},
-    {self},
+    self,
+    tree::{NodeChildren, Tree},
 };
 
 pub trait Visitor<'a> {
@@ -40,7 +33,7 @@ pub fn walk_tree<'a>(
 
 fn walk_dir<'a>(
     dir: &Path,
-    maybe_tree_directory: Option<&'a BTreeMap<OsString, Node>>,
+    maybe_node_children: Option<&'a NodeChildren>,
     inherited_properties: Option<declarative::Properties<'a>>,
     visitor: &mut impl Visitor<'a>,
 ) -> Result<(), std::io::Error> {
@@ -51,7 +44,7 @@ fn walk_dir<'a>(
                     Ok(entry) => {
                         match process_entry(
                             &entry,
-                            maybe_tree_directory,
+                            maybe_node_children,
                             inherited_properties,
                             visitor,
                         ) {
@@ -73,14 +66,14 @@ fn walk_dir<'a>(
 
 fn process_entry<'a>(
     entry: &std::fs::DirEntry,
-    maybe_tree_directory: Option<&'a BTreeMap<OsString, Node>>,
+    maybe_node_children: Option<&'a NodeChildren>,
     inherited_properties: Option<declarative::Properties<'a>>,
     visitor: &mut impl Visitor<'a>,
 ) -> Result<(), std::io::Error> {
     let metadata = entry.metadata()?;
     let path = entry.path();
     let path_type = PathType::from(entry.file_type()?);
-    let maybe_tree_node = maybe_tree_directory
+    let maybe_tree_node = maybe_node_children
         .and_then(|tree_directory| tree_directory.get(entry.file_name().as_os_str()));
 
     let maybe_declared_properties = maybe_tree_node
