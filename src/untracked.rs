@@ -201,9 +201,15 @@ impl<'a> UntrackedVisitor<'a> {
             }
         }
 
+        if entry.maybe_path_type.is_none() {
+            self.report_untracked_path(entry.path, entry.maybe_properties, path_type);
+
+            return ControlFlow::Break(());
+        }
+
         if entry
             .maybe_properties
-            .is_none_or(|properties| !properties.owner.enabled())
+            .is_some_and(|properties| !properties.owner.enabled())
         {
             self.report_untracked_path(entry.path, entry.maybe_properties, path_type);
 
@@ -243,7 +249,7 @@ impl<'a> fs::Visitor<'a> for UntrackedVisitor<'a> {
                             ControlFlow::Break(())
                         }
                     } else {
-                        ControlFlow::Break(())
+                        ControlFlow::Continue(())
                     }
                 }
                 declarative::PathType::File(_) => {
