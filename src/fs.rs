@@ -101,7 +101,22 @@ fn process_entry<'a>(
                 )
                 .is_continue()
             {
-                walk_dir(&path, maybe_children, maybe_declared_properties, visitor)?;
+                let propagate_properties = match maybe_declared_path_type {
+                    Some(declarative::PathType::Directory { owns_contents }) => owns_contents,
+                    None => true,
+                    _ => false,
+                };
+
+                walk_dir(
+                    &path,
+                    maybe_children,
+                    if propagate_properties {
+                        maybe_declared_properties
+                    } else {
+                        None
+                    },
+                    visitor,
+                )?;
             }
         }
         PathType::File(file_type) => {
