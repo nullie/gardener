@@ -2,9 +2,9 @@ use std::path::Path;
 
 use systemd_tmpfiles::Directive;
 
-use crate::declarative::{self, FileType, Owner, PathType, tree::Tree};
+use crate::declarative::{self, FileType, Owner, PathType};
 
-pub fn add_systemd_tmpfiles(tree: &mut Tree) -> rootcause::Result<()> {
+pub fn add_systemd_tmpfiles(tree: &mut declarative::Tree) -> rootcause::Result<()> {
     let owner = Owner::AdhocSystem {
         name: "systemd-tmpfiles",
     };

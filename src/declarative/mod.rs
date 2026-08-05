@@ -1,6 +1,8 @@
 pub mod tmpfiles;
 pub mod tree;
 
+pub type Tree<'a> = tree::Tree<Properties<'a>>;
+
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum PathType {
     Directory { owns_contents: bool },

@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use rootcause::Result;
 
-use crate::fs;
+use crate::{declarative::Properties, fs};
 
 pub trait Reporter {
     fn report_file(
@@ -10,7 +10,7 @@ pub trait Reporter {
         path: &std::path::Path,
         file_type: fs::FileType,
         len: u64,
-        maybe_properties: Option<crate::declarative::Properties>,
+        maybe_properties: Option<Properties>,
     );
 }
 
@@ -25,7 +25,7 @@ impl<R: Reporter> Visitor<R> {
 
     pub fn visit_fs(
         path: &std::path::Path,
-        tree: &crate::declarative::tree::Tree,
+        tree: &crate::declarative::Tree,
         reporter: R,
     ) -> Result<R> {
         let mut visitor = Visitor::new(reporter);
@@ -36,8 +36,12 @@ impl<R: Reporter> Visitor<R> {
     }
 }
 
-impl<'a, R: Reporter> fs::Visitor<'a> for Visitor<R> {
-    fn visit_dir(&mut self, entry: fs::Entry, has_declared_children: bool) -> ControlFlow<(), ()> {
+impl<'a, R: Reporter> fs::Visitor<Properties<'a>> for Visitor<R> {
+    fn visit_dir(
+        &mut self,
+        entry: fs::Entry<Properties>,
+        has_declared_children: bool,
+    ) -> ControlFlow<(), ()> {
         if has_declared_children
             || entry
                 .maybe_properties
@@ -49,7 +53,7 @@ impl<'a, R: Reporter> fs::Visitor<'a> for Visitor<R> {
         }
     }
 
-    fn visit_file(&mut self, entry: fs::Entry, file_type: fs::FileType, len: u64) {
+    fn visit_file(&mut self, entry: fs::Entry<Properties>, file_type: fs::FileType, len: u64) {
         if entry
             .maybe_properties
             .is_none_or(|properties| properties.storage_class.should_backup())

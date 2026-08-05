@@ -1,28 +1,28 @@
 use std::{collections::BTreeMap, ffi::OsString};
 
-use crate::declarative::{self, FileType, PathType, Properties};
+use crate::declarative::{self, FileType, PathType};
 
-pub type NodeChildren<'a> = BTreeMap<OsString, Node<'a>>;
+pub type NodeChildren<P> = BTreeMap<OsString, Node<P>>;
 
 #[derive(Debug)]
-pub enum Node<'a> {
+pub enum Node<P> {
     Directory {
-        children: NodeChildren<'a>,
-        kind: NodeKind<'a>,
+        children: NodeChildren<P>,
+        kind: NodeKind<P>,
     },
     File {
         file_type: FileType,
-        properties: declarative::Properties<'a>,
+        properties: P,
     },
 }
 
 #[derive(Debug)]
-pub enum NodeKind<'a> {
-    OwnsContents(declarative::Properties<'a>),
-    Empty(Option<declarative::Properties<'a>>),
+pub enum NodeKind<P> {
+    OwnsContents(P),
+    Empty(Option<P>),
 }
 
-impl<'a> Node<'a> {
+impl<P: Copy> Node<P> {
     pub(crate) fn intermediate() -> Self {
         Self::Directory {
             children: BTreeMap::new(),
@@ -30,10 +30,7 @@ impl<'a> Node<'a> {
         }
     }
 
-    pub(crate) fn new(
-        path_type: declarative::PathType,
-        properties: declarative::Properties<'a>,
-    ) -> Self {
+    pub(crate) fn new(path_type: declarative::PathType, properties: P) -> Self {
         match path_type {
             PathType::Directory { owns_contents } => Node::Directory {
                 children: BTreeMap::new(),
@@ -50,7 +47,7 @@ impl<'a> Node<'a> {
         }
     }
 
-    pub fn get_children(&'a self) -> Option<&'a NodeChildren<'a>> {
+    pub fn get_children(&self) -> Option<&NodeChildren<P>> {
         match self {
             Node::Directory { children, .. } => Some(children),
             _ => None,
@@ -69,7 +66,7 @@ impl<'a> Node<'a> {
         }
     }
 
-    pub fn get_properties(&self) -> Option<declarative::Properties<'a>> {
+    pub fn get_properties(&self) -> Option<P> {
         match self {
             Node::Directory { kind, .. } => kind.get_properties(),
             Node::File { properties, .. } => Some(*properties),
@@ -77,8 +74,8 @@ impl<'a> Node<'a> {
     }
 }
 
-impl<'a> NodeKind<'a> {
-    fn get_properties(&self) -> Option<Properties<'a>> {
+impl<P: Copy> NodeKind<P> {
+    fn get_properties(&self) -> Option<P> {
         match *self {
             NodeKind::Empty(maybe_properties) => maybe_properties,
             NodeKind::OwnsContents(properties) => Some(properties),

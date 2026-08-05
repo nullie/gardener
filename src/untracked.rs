@@ -6,7 +6,12 @@ use std::{
 
 use rootcause::Result;
 
-use crate::{config::Config, declarative, fs, presentation::UntrackedPath};
+use crate::{
+    config::Config,
+    declarative::{Owner, PathType, Properties},
+    fs,
+    presentation::UntrackedPath,
+};
 
 pub fn check_untracked() -> Result<()> {
     let config = Config::load()?;
@@ -50,7 +55,7 @@ pub fn print_untracked() -> Result<()> {
 #[derive(Default)]
 struct UntrackedVisitor<'a> {
     untracked: Vec<UntrackedPath<PathBuf>>,
-    tracked_by_disabled_module: BTreeMap<declarative::Owner<'a>, Vec<UntrackedPath<PathBuf>>>,
+    tracked_by_disabled_module: BTreeMap<Owner<'a>, Vec<UntrackedPath<PathBuf>>>,
 }
 
 impl<'a> UntrackedVisitor<'a> {
@@ -98,12 +103,12 @@ impl<'a> UntrackedVisitor<'a> {
 
         for owner in self.tracked_by_disabled_module.keys() {
             match owner {
-                declarative::Owner::System { name, enabled } => {
+                Owner::System { name, enabled } => {
                     assert!(!enabled);
 
                     system_modules.push(name);
                 }
-                declarative::Owner::User {
+                Owner::User {
                     name,
                     user,
                     enabled,
@@ -147,7 +152,7 @@ impl<'a> UntrackedVisitor<'a> {
     fn report_untracked_path<'b, 'c>(
         &'b mut self,
         path: &'c Path,
-        maybe_properties: Option<declarative::Properties<'a>>,
+        maybe_properties: Option<Properties<'a>>,
         path_type: fs::PathType,
     ) {
         if let Some(properties) = maybe_properties {
@@ -169,7 +174,7 @@ impl<'a> UntrackedVisitor<'a> {
     fn report_mismatching_path(
         &mut self,
         path: &Path,
-        maybe_properties: Option<declarative::Properties<'_>>,
+        maybe_properties: Option<Properties<'_>>,
         expected: fs::PathType,
         found: fs::PathType,
     ) {
@@ -181,9 +186,9 @@ impl<'a> UntrackedVisitor<'a> {
         );
     }
 
-    fn check_path<'b, 'c>(
+    fn check_path<'b>(
         &'b mut self,
-        entry: fs::Entry<'a, 'c>,
+        entry: fs::Entry<Properties<'a>>,
         path_type: fs::PathType,
     ) -> ControlFlow<(), ()> {
         if let Some(declared_path_type) = entry.maybe_path_type {
@@ -220,17 +225,17 @@ impl<'a> UntrackedVisitor<'a> {
     }
 }
 
-impl<'a> fs::Visitor<'a> for UntrackedVisitor<'a> {
+impl<'a> fs::Visitor<Properties<'a>> for UntrackedVisitor<'a> {
     fn visit_dir(
         &mut self,
-        entry: fs::Entry<'a, '_>,
+        entry: fs::Entry<Properties<'a>>,
         _has_declared_children: bool,
     ) -> ControlFlow<(), ()> {
         self.check_path(entry, fs::PathType::Directory)?;
 
         if let Some(declared_path_type) = entry.maybe_path_type {
             match declared_path_type {
-                declarative::PathType::Directory { owns_contents } => {
+                PathType::Directory { owns_contents } => {
                     if let Some(properties) = entry.maybe_properties {
                         // If not enabled, then it's untracked
                         if !properties.owner.enabled() {
@@ -252,7 +257,7 @@ impl<'a> fs::Visitor<'a> for UntrackedVisitor<'a> {
                         ControlFlow::Continue(())
                     }
                 }
-                declarative::PathType::File(_) => {
+                PathType::File(_) => {
                     self.report_mismatching_path(
                         entry.path,
                         entry.maybe_properties,
@@ -269,7 +274,7 @@ impl<'a> fs::Visitor<'a> for UntrackedVisitor<'a> {
         }
     }
 
-    fn visit_file(&mut self, entry: fs::Entry<'a, '_>, file_type: fs::FileType, _len: u64) {
+    fn visit_file(&mut self, entry: fs::Entry<Properties<'a>>, file_type: fs::FileType, _len: u64) {
         if let Some(declared_path_type) = entry.maybe_path_type {
             let expected_path_type = fs::PathType::from(declared_path_type);
             let path_type = fs::PathType::from(file_type);

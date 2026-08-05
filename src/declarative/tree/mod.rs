@@ -11,11 +11,11 @@ use thiserror::Error;
 pub use self::node::{Node, NodeChildren, NodeKind};
 use crate::declarative::{self, PathType};
 
-pub struct Tree<'a> {
-    pub root: NodeChildren<'a>,
+pub struct Tree<P> {
+    pub root: NodeChildren<P>,
 }
 
-impl<'a> Tree<'a> {
+impl<P: Copy + std::fmt::Debug> Tree<P> {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
@@ -23,7 +23,7 @@ impl<'a> Tree<'a> {
         }
     }
 
-    fn path_to_components<'b>(path: &Path) -> Result<Vec<OsString>, TreeError<'a, 'b>> {
+    fn path_to_components<'a>(path: &Path) -> Result<Vec<OsString>, TreeError<'a, P>> {
         let mut components = path.components();
 
         if components.next() != Some(std::path::Component::RootDir) {
@@ -35,7 +35,7 @@ impl<'a> Tree<'a> {
                 std::path::Component::Normal(c) => Ok(c.to_owned()),
                 c => Err(TreeError::UnexpectedPathComponent(format!("{:?}", c))),
             })
-            .collect::<Result<_, TreeError>>()?;
+            .collect::<Result<_, TreeError<P>>>()?;
 
         Ok(intermediate)
     }
@@ -44,8 +44,8 @@ impl<'a> Tree<'a> {
         &mut self,
         path: &Path,
         path_type: declarative::PathType,
-        properties: declarative::Properties<'a>,
-    ) -> Result<(), TreeError<'a, '_>> {
+        properties: P,
+    ) -> Result<(), TreeError<'_, P>> {
         self.add_path_by_components(
             Self::path_to_components(path)?.into_iter(),
             path_type,
@@ -57,8 +57,8 @@ impl<'a> Tree<'a> {
         &mut self,
         mut components: impl DoubleEndedIterator<Item = OsString>,
         path_type: declarative::PathType,
-        properties: declarative::Properties<'a>,
-    ) -> Result<(), TreeError<'a, '_>> {
+        properties: P,
+    ) -> Result<(), TreeError<'_, P>> {
         let mut directory = &mut self.root;
 
         let Some(last_component) = components.next_back() else {
@@ -117,13 +117,13 @@ impl<'a> Tree<'a> {
         }
     }
 
-    fn insert_into_vacant<'b>(
-        vacant_entry: btree_map::VacantEntry<'b, OsString, Node<'a>>,
+    fn insert_into_vacant(
+        vacant_entry: btree_map::VacantEntry<'_, OsString, Node<P>>,
         remaining_intermediate: impl DoubleEndedIterator<Item = OsString>,
         last_component: OsString,
         path_type: declarative::PathType,
-        properties: declarative::Properties<'a>,
-    ) -> Result<(), TreeError<'a, 'b>> {
+        properties: P,
+    ) -> Result<(), TreeError<'_, P>> {
         let Node::Directory { children, .. } = vacant_entry.insert(Node::intermediate()) else {
             unreachable!();
         };
@@ -151,11 +151,11 @@ impl<'a> Tree<'a> {
         Ok(())
     }
 
-    fn merge_dirs<'b>(
-        existing_kind: &'b mut NodeKind<'a>,
+    fn merge_dirs(
+        existing_kind: &mut NodeKind<P>,
         owns_contents: bool,
-        properties: declarative::Properties<'a>,
-    ) -> Result<(), TreeError<'a, 'b>> {
+        properties: P,
+    ) -> Result<(), TreeError<'_, P>> {
         if matches!(
             existing_kind,
             NodeKind::OwnsContents(_) | NodeKind::Empty(Some(_))
@@ -182,11 +182,11 @@ impl<'a> Tree<'a> {
 }
 
 #[derive(Error, Debug)]
-pub enum TreeError<'a, 'b> {
+pub enum TreeError<'a, P: std::fmt::Debug> {
     #[error("path is empty")]
     EmptyPath,
     #[error("conflicting properties: {0:?}")]
-    ExistingProperties(&'b mut declarative::Properties<'a>),
+    ExistingProperties(&'a mut P),
     #[error("path is overlapping")]
     ConflictingPathType,
     #[error("unexpected component")]

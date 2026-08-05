@@ -5,37 +5,34 @@ use crate::declarative::{
     tree::{NodeChildren, Tree},
 };
 
-pub trait Visitor<'a> {
-    fn visit_dir(
-        &mut self,
-        declared: Entry<'a, '_>,
-        has_declared_children: bool,
-    ) -> ControlFlow<(), ()>;
-    fn visit_file(&mut self, declared: Entry<'a, '_>, file_type: FileType, len: u64);
+pub trait Visitor<P> {
+    fn visit_dir(&mut self, declared: Entry<P>, has_declared_children: bool)
+    -> ControlFlow<(), ()>;
+    fn visit_file(&mut self, declared: Entry<P>, file_type: FileType, len: u64);
     fn visit_error(&mut self, dir: &Path, e: std::io::Error);
 }
 
 // TODO: move to declared
 #[derive(Debug, Clone, Copy)]
-pub struct Entry<'a, 'b> {
-    pub path: &'b Path,
+pub struct Entry<'a, P> {
+    pub path: &'a Path,
     pub maybe_path_type: Option<declarative::PathType>,
-    pub maybe_properties: Option<declarative::Properties<'a>>,
+    pub maybe_properties: Option<P>,
 }
 
-pub fn walk_tree<'a>(
+pub fn walk_tree<P: Copy + std::fmt::Debug>(
     dir: &Path,
-    tree: &'a Tree<'a>,
-    visitor: &mut impl Visitor<'a>,
+    tree: &Tree<P>,
+    visitor: &mut impl Visitor<P>,
 ) -> rootcause::Result<()> {
     walk_dir(dir, Some(&tree.root), None, visitor).map_err(rootcause::Report::from)
 }
 
-fn walk_dir<'a>(
+fn walk_dir<P: Copy + std::fmt::Debug>(
     dir: &Path,
-    maybe_node_children: Option<&'a NodeChildren>,
-    inherited_properties: Option<declarative::Properties<'a>>,
-    visitor: &mut impl Visitor<'a>,
+    maybe_node_children: Option<&NodeChildren<P>>,
+    inherited_properties: Option<P>,
+    visitor: &mut impl Visitor<P>,
 ) -> Result<(), std::io::Error> {
     match fs::read_dir(dir) {
         Ok(entries) => {
@@ -64,11 +61,11 @@ fn walk_dir<'a>(
     Ok(())
 }
 
-fn process_entry<'a>(
+fn process_entry<P: Copy + std::fmt::Debug>(
     entry: &std::fs::DirEntry,
-    maybe_node_children: Option<&'a NodeChildren>,
-    inherited_properties: Option<declarative::Properties<'a>>,
-    visitor: &mut impl Visitor<'a>,
+    maybe_node_children: Option<&NodeChildren<P>>,
+    inherited_properties: Option<P>,
+    visitor: &mut impl Visitor<P>,
 ) -> Result<(), std::io::Error> {
     let metadata = entry.metadata()?;
     let path = entry.path();

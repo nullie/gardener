@@ -67,7 +67,7 @@ impl Config {
     }
 
     /// Convert to tree, adding sytstemd-tmpfiles
-    pub fn to_tree(&self) -> rootcause::Result<Tree<'_>> {
+    pub fn to_tree(&self) -> rootcause::Result<declarative::Tree<'_>> {
         let mut tree = Tree::new();
 
         self.add_to_tree(&mut tree)
@@ -77,7 +77,7 @@ impl Config {
         Ok(tree)
     }
 
-    pub fn add_to_tree<'a>(&'a self, tree: &mut Tree<'a>) -> rootcause::Result<()> {
+    pub fn add_to_tree<'a>(&'a self, tree: &mut declarative::Tree<'a>) -> rootcause::Result<()> {
         for (path, path_type, path_properties) in self.paths() {
             tree.add_path(&path, path_type, path_properties)
                 .map_err(|e| rootcause::report!(e.to_string()))?;
