@@ -35,7 +35,7 @@ fn test_visitor() {
     test_tree.file("/non-dir/inside-non-dir", "inside-non-dir");
 
     let mut visitor = TestVisitor::new();
-    super::walk_tree(test_directory.path(), &test_tree.tree, &mut visitor)
+    super::walker::walk_tree(test_directory.path(), &test_tree.tree, &mut visitor)
         .expect("walk_tree failed");
 
     assert_eq!(visitor.visits, vec![]);
@@ -88,7 +88,8 @@ impl<P: Copy + std::fmt::Debug> TestTree<P> {
     }
 
     fn dir(&mut self, path: &str, owns_contents: bool, properties: P) {
-        let path_type = declarative::PathType::Directory { owns_contents };
+        let path_type =
+            declarative::PathType::Directory(declarative::DirectoryProperties { owns_contents });
 
         self.tree
             .add_path(Path::new(path), path_type, properties)
@@ -108,7 +109,7 @@ struct TestVisitor<P> {
     visits: Vec<TestVisit<P>>,
 }
 
-impl<P> TestVisitor<P> {
+impl<P: Eq> TestVisitor<P> {
     fn new() -> Self {
         Self { visits: Vec::new() }
     }
@@ -117,20 +118,35 @@ impl<P> TestVisitor<P> {
 #[derive(PartialEq, Eq, Debug)]
 struct TestVisit<P> {
     path: PathBuf,
-    path_type: fs::PathType,
-    declared: fs::DeclaredEntry<P>,
+    kind: VisitKind,
+    declared: declarative::Entry<P>,
 }
 
-impl<'a, P> fs::Visitor<P> for TestVisitor<P> {
+type VisitKind = fs::Entry<DirectoryVisit, FileVisit>;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct DirectoryVisit {
+    has_declared_children: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct FileVisit {
+    file_type: super::FileType,
+    len: u64,
+}
+
+impl<P: Eq> fs::unix::walker::Visitor<P> for TestVisitor<P> {
     fn visit_dir(
         &mut self,
         path: &Path,
-        declared: fs::DeclaredEntry<P>,
+        declared: declarative::Entry<P>,
         has_declared_children: bool,
     ) -> std::ops::ControlFlow<(), ()> {
         self.visits.push(TestVisit {
             path: path.to_owned(),
-            path_type: fs::PathType::Directory,
+            kind: VisitKind::Directory(DirectoryVisit {
+                has_declared_children,
+            }),
             declared,
         });
 
@@ -140,18 +156,18 @@ impl<'a, P> fs::Visitor<P> for TestVisitor<P> {
     fn visit_file(
         &mut self,
         path: &Path,
-        file_type: fs::FileType,
-        declared: fs::DeclaredEntry<P>,
+        file_type: super::FileType,
+        declared: declarative::Entry<P>,
         len: u64,
     ) {
         self.visits.push(TestVisit {
             path: path.to_owned(),
-            path_type: fs::PathType::File(file_type),
+            kind: VisitKind::File(FileVisit { file_type, len }),
             declared,
         });
     }
 
-    fn visit_error(&mut self, dir: &Path, e: std::io::Error) {
-        todo!()
+    fn visit_error(&mut self, _dir: &Path, _e: std::io::Error) {
+        panic!("Unexpected error in visitor")
     }
 }

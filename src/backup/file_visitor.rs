@@ -2,13 +2,16 @@ use std::{ops::ControlFlow, path::Path};
 
 use rootcause::Result;
 
-use crate::{declarative::Properties, fs};
+use crate::{
+    declarative::{self, Properties},
+    fs::unix,
+};
 
 pub trait Reporter {
     fn report_file(
         &mut self,
         path: &std::path::Path,
-        file_type: fs::FileType,
+        file_type: unix::FileType,
         len: u64,
         maybe_properties: Option<Properties>,
     );
@@ -30,17 +33,17 @@ impl<R: Reporter> Visitor<R> {
     ) -> Result<R> {
         let mut visitor = Visitor::new(reporter);
 
-        fs::walk_tree(path, tree, &mut visitor)?;
+        unix::walker::walk_tree(path, tree, &mut visitor)?;
 
         Ok(visitor.reporter)
     }
 }
 
-impl<'a, R: Reporter> fs::Visitor<Properties<'a>> for Visitor<R> {
+impl<'a, R: Reporter> unix::walker::Visitor<Properties<'a>> for Visitor<R> {
     fn visit_dir(
         &mut self,
         _path: &Path,
-        declared: fs::DeclaredEntry<Properties>,
+        declared: declarative::Entry<Properties>,
         has_declared_children: bool,
     ) -> ControlFlow<(), ()> {
         if has_declared_children
@@ -57,8 +60,8 @@ impl<'a, R: Reporter> fs::Visitor<Properties<'a>> for Visitor<R> {
     fn visit_file(
         &mut self,
         path: &Path,
-        file_type: fs::FileType,
-        declared: fs::DeclaredEntry<Properties>,
+        file_type: unix::FileType,
+        declared: declarative::Entry<Properties>,
         len: u64,
     ) {
         if declared

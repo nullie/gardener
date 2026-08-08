@@ -3,10 +3,27 @@ pub mod tree;
 
 pub type Tree<'a> = tree::Tree<Properties<'a>>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Entry<P> {
+    pub maybe_path_type: Option<PathType>,
+    pub maybe_properties: Option<P>,
+}
+
+pub type PathType = crate::fs::Entry<DirectoryProperties, FileType>;
+pub type ExpectedPathType = crate::fs::Entry<(), FileType>;
+
+impl PathType {
+    pub fn expected_path_type(self) -> ExpectedPathType {
+        match self {
+            Self::Directory(_) => ExpectedPathType::Directory(()),
+            Self::File(file_type) => ExpectedPathType::File(file_type),
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
-pub enum PathType {
-    Directory { owns_contents: bool },
-    File(FileType),
+pub struct DirectoryProperties {
+    pub owns_contents: bool,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]

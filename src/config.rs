@@ -7,7 +7,7 @@ use std::{
 use rootcause::prelude::ResultExt;
 use serde::{Deserialize, Deserializer};
 
-use crate::declarative::{self, FileType, PathType, StorageClass, tree::Tree};
+use crate::declarative::{self, DirectoryProperties, FileType, PathType, StorageClass, tree::Tree};
 
 fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
@@ -155,9 +155,9 @@ fn path_set_to_paths<'a>(
     [
         (
             &path_set.directories,
-            PathType::Directory {
+            PathType::Directory(DirectoryProperties {
                 owns_contents: true,
-            },
+            }),
         ),
         (&path_set.files, PathType::File(FileType::Regular)),
         (&path_set.symlinks, PathType::File(FileType::Symlink)),

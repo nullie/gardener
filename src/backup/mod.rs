@@ -4,7 +4,12 @@ use std::path::Path;
 
 use rootcause::Result;
 
-use crate::{config::Config, declarative::Properties, fs, presentation::UntrackedPath};
+use crate::{
+    config::Config,
+    declarative::Properties,
+    fs::{self, unix},
+    presentation::UntrackedPath,
+};
 
 pub fn ls() -> Result<()> {
     let config = Config::load()?;
@@ -21,14 +26,14 @@ impl file_visitor::Reporter for LsReporter {
     fn report_file(
         &mut self,
         path: &std::path::Path,
-        file_type: fs::FileType,
+        file_type: unix::FileType,
         len: u64,
         maybe_properties: Option<Properties>,
     ) {
         if maybe_properties.is_none_or(|properties| properties.storage_class.should_backup()) {
             println!(
                 "{}: {} {:?}",
-                UntrackedPath::new(path, fs::PathType::File(file_type)),
+                UntrackedPath::new(path, fs::Entry::File(file_type)),
                 len,
                 maybe_properties
             );
@@ -64,7 +69,7 @@ impl file_visitor::Reporter for SizeReporter {
     fn report_file(
         &mut self,
         _path: &std::path::Path,
-        _file_type: fs::FileType,
+        _file_type: unix::FileType,
         len: u64,
         _maybe_properties: Option<Properties>,
     ) {

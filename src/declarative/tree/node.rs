@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, ffi::OsString};
 
-use crate::declarative::{self, FileType, PathType};
+use crate::declarative::{self, DirectoryProperties, FileType, PathType};
 
 pub type NodeChildren<P> = BTreeMap<OsString, Node<P>>;
 
@@ -32,7 +32,7 @@ impl<P: Copy> Node<P> {
 
     pub(crate) fn new(path_type: declarative::PathType, properties: P) -> Self {
         match path_type {
-            PathType::Directory { owns_contents } => Node::Directory {
+            PathType::Directory(DirectoryProperties { owns_contents }) => Node::Directory {
                 children: BTreeMap::new(),
                 kind: if owns_contents {
                     NodeKind::OwnsContents(properties)
@@ -56,12 +56,12 @@ impl<P: Copy> Node<P> {
 
     pub fn path_type(&self) -> PathType {
         match self {
-            Node::Directory { kind, .. } => PathType::Directory {
+            Node::Directory { kind, .. } => PathType::Directory(DirectoryProperties {
                 owns_contents: match kind {
                     NodeKind::OwnsContents(_) => true,
                     NodeKind::Empty(_) => false,
                 },
-            },
+            }),
             Node::File { file_type, .. } => PathType::File(*file_type),
         }
     }

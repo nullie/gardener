@@ -100,9 +100,10 @@ impl<P: Copy + std::fmt::Debug> Tree<P> {
                 let occupied = occupied.into_mut();
 
                 match (occupied, path_type) {
-                    (Node::Directory { kind, .. }, PathType::Directory { owns_contents }) => {
-                        Self::merge_dirs(kind, owns_contents, properties)
-                    }
+                    (
+                        Node::Directory { kind, .. },
+                        PathType::Directory(declarative::DirectoryProperties { owns_contents }),
+                    ) => Self::merge_dirs(kind, owns_contents, properties),
                     (occupied, path_type) => {
                         let existing_path_type = occupied.path_type();
 

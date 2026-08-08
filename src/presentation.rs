@@ -1,14 +1,14 @@
 use std::path::Path;
 
-use crate::{declarative, fs};
+use crate::{declarative, fs::unix};
 
 pub struct UntrackedPath<P: AsRef<Path>> {
     pub path: P,
-    pub path_type: fs::PathType,
+    pub path_type: unix::PathType,
 }
 
 impl<P: AsRef<Path>> UntrackedPath<P> {
-    pub fn new(path: P, path_type: fs::PathType) -> Self {
+    pub fn new(path: P, path_type: unix::PathType) -> Self {
         Self { path, path_type }
     }
 }
@@ -16,9 +16,9 @@ impl<P: AsRef<Path>> UntrackedPath<P> {
 impl<P: AsRef<Path>> std::fmt::Display for UntrackedPath<P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let type_symbol = match &self.path_type {
-            fs::PathType::Directory => 'd',
-            fs::PathType::File(file_type) => match file_type {
-                fs::FileType::Declarative(declared_type) => match declared_type {
+            unix::PathType::Directory(()) => 'd',
+            unix::PathType::File(file_type) => match file_type {
+                unix::FileType::Declarative(declared_type) => match declared_type {
                     declarative::FileType::Regular => 'f',
                     declarative::FileType::Symlink => 's',
                     declarative::FileType::Fifo => 'p',
@@ -26,7 +26,7 @@ impl<P: AsRef<Path>> std::fmt::Display for UntrackedPath<P> {
                     declarative::FileType::BlockDevice => 'l',
                 },
 
-                fs::FileType::Other(_file_type) => '?',
+                unix::FileType::Other(_file_type) => '?',
             },
         };
 
