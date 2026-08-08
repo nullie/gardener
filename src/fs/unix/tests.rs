@@ -4,13 +4,13 @@ use pretty_assertions::assert_eq;
 use tempdir::TempDir;
 
 use crate::{
-    declarative::{self},
+    decl::{self},
     fs,
 };
 
 #[test]
 fn test_visitor() {
-    let test_directory = TestDirectory::new(&[
+    let test_dir = TestDir::new(&[
         "conflicting-type-file",
         "conflicting-type-dir/",
         "non-owning/",
@@ -35,19 +35,19 @@ fn test_visitor() {
     test_tree.file("/non-dir/inside-non-dir", "inside-non-dir");
 
     let mut visitor = TestVisitor::new();
-    super::walker::walk_tree(test_directory.path(), &test_tree.tree, &mut visitor)
+    super::walker::walk_tree(test_dir.path(), &test_tree.tree, &mut visitor)
         .expect("walk_tree failed");
 
     assert_eq!(visitor.visits, vec![]);
 }
 
-struct TestDirectory {
+struct TestDir {
     tempdir: tempdir::TempDir,
 }
 
-impl TestDirectory {
+impl TestDir {
     fn new(entries: &[&str]) -> Self {
-        let tempdir = TempDir::new("gardener-test").expect("couldn't create temporary directory");
+        let tempdir = TempDir::new("gardener-test").expect("couldn't create temporary dir");
 
         for &entry in entries {
             let (path, is_dir) = if let Some(without_suffix) = entry.strip_suffix('/') {
@@ -77,30 +77,29 @@ impl TestDirectory {
 }
 
 struct TestTree<P> {
-    tree: declarative::tree::Tree<P>,
+    tree: decl::tree::Tree<P>,
 }
 
 impl<P: Copy + std::fmt::Debug> TestTree<P> {
     fn new() -> Self {
         Self {
-            tree: declarative::tree::Tree::new(),
+            tree: decl::tree::Tree::new(),
         }
     }
 
-    fn dir(&mut self, path: &str, owns_contents: bool, properties: P) {
-        let path_type =
-            declarative::PathType::Directory(declarative::DirectoryProperties { owns_contents });
+    fn dir(&mut self, path: &str, owns_contents: bool, props: P) {
+        let path_type = decl::PathType::Dir(decl::DirProps { owns_contents });
 
         self.tree
-            .add_path(Path::new(path), path_type, properties)
+            .add_path(Path::new(path), path_type, props)
             .expect("add_path failed")
     }
 
-    fn file(&mut self, path: &str, properties: P) {
-        let path_type = declarative::PathType::File(declarative::FileType::Regular);
+    fn file(&mut self, path: &str, props: P) {
+        let path_type = decl::PathType::File(decl::FileType::Regular);
 
         self.tree
-            .add_path(Path::new(path), path_type, properties)
+            .add_path(Path::new(path), path_type, props)
             .expect("add_path failed")
     }
 }
@@ -119,13 +118,13 @@ impl<P: Eq> TestVisitor<P> {
 struct TestVisit<P> {
     path: PathBuf,
     kind: VisitKind,
-    declared: declarative::Entry<P>,
+    declared: decl::Entry<P>,
 }
 
-type VisitKind = fs::Entry<DirectoryVisit, FileVisit>;
+type VisitKind = fs::Entry<DirVisit, FileVisit>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct DirectoryVisit {
+struct DirVisit {
     has_declared_children: bool,
 }
 
@@ -139,12 +138,12 @@ impl<P: Eq> fs::unix::walker::Visitor<P> for TestVisitor<P> {
     fn visit_dir(
         &mut self,
         path: &Path,
-        declared: declarative::Entry<P>,
+        declared: decl::Entry<P>,
         has_declared_children: bool,
     ) -> std::ops::ControlFlow<(), ()> {
         self.visits.push(TestVisit {
             path: path.to_owned(),
-            kind: VisitKind::Directory(DirectoryVisit {
+            kind: VisitKind::Dir(DirVisit {
                 has_declared_children,
             }),
             declared,
@@ -157,7 +156,7 @@ impl<P: Eq> fs::unix::walker::Visitor<P> for TestVisitor<P> {
         &mut self,
         path: &Path,
         file_type: super::FileType,
-        declared: declarative::Entry<P>,
+        declared: decl::Entry<P>,
         len: u64,
     ) {
         self.visits.push(TestVisit {

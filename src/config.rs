@@ -7,7 +7,7 @@ use std::{
 use rootcause::prelude::ResultExt;
 use serde::{Deserialize, Deserializer};
 
-use crate::declarative::{self, DirectoryProperties, FileType, PathType, StorageClass, tree::Tree};
+use crate::decl::{self, DirProps, FileType, PathType, StorageClass, tree::Tree};
 
 fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
@@ -67,31 +67,31 @@ impl Config {
     }
 
     /// Convert to tree, adding sytstemd-tmpfiles
-    pub fn to_tree(&self) -> rootcause::Result<declarative::Tree<'_>> {
+    pub fn to_tree(&self) -> rootcause::Result<decl::Tree<'_>> {
         let mut tree = Tree::new();
 
         self.add_to_tree(&mut tree)
             .context("failed adding config paths")?;
-        declarative::tmpfiles::add_systemd_tmpfiles(&mut tree).context("failed adding tmpfiles")?;
+        decl::tmpfiles::add_systemd_tmpfiles(&mut tree).context("failed adding tmpfiles")?;
 
         Ok(tree)
     }
 
-    pub fn add_to_tree<'a>(&'a self, tree: &mut declarative::Tree<'a>) -> rootcause::Result<()> {
-        for (path, path_type, path_properties) in self.paths() {
-            tree.add_path(&path, path_type, path_properties)
+    pub fn add_to_tree<'a>(&'a self, tree: &mut decl::Tree<'a>) -> rootcause::Result<()> {
+        for (path, path_type, path_props) in self.paths() {
+            tree.add_path(&path, path_type, path_props)
                 .map_err(|e| rootcause::report!(e.to_string()))?;
         }
 
         Ok(())
     }
 
-    pub fn paths(&self) -> impl Iterator<Item = (PathBuf, PathType, declarative::Properties<'_>)> {
+    pub fn paths(&self) -> impl Iterator<Item = (PathBuf, PathType, decl::Props<'_>)> {
         let user_paths = self.users.iter().flat_map(|(user_name, user_config)| {
             let home_dir = Path::new(&user_config.home);
 
             let adhoc_paths = user_config.adhoc.iter().flat_map(|(name, module)| {
-                let owner = declarative::Owner::AdhocUser {
+                let owner = decl::Owner::AdhocUser {
                     name,
                     user: user_name,
                 };
@@ -101,7 +101,7 @@ impl Config {
 
             let paths = user_config.modules.iter().flat_map(|(name, &enabled)| {
                 let module = self.available_modules.user.get(name).unwrap();
-                let owner = declarative::Owner::User {
+                let owner = decl::Owner::User {
                     name,
                     user: user_name,
                     enabled,
@@ -112,15 +112,15 @@ impl Config {
 
             adhoc_paths
                 .chain(paths)
-                .map(|(path, path_type, properties)| (home_dir.join(path), path_type, properties))
+                .map(|(path, path_type, props)| (home_dir.join(path), path_type, props))
         });
 
         let system_paths = self.enabled_modules.iter().flat_map(|(name, &enabled)| {
             let module = self.available_modules.system.get(name).unwrap();
-            let owner = declarative::Owner::System { name, enabled };
+            let owner = decl::Owner::System { name, enabled };
 
             module_to_paths(module, owner)
-                .map(move |(path, path_type, properties)| (path.to_owned(), path_type, properties))
+                .map(move |(path, path_type, props)| (path.to_owned(), path_type, props))
         });
 
         user_paths.chain(system_paths)
@@ -129,8 +129,8 @@ impl Config {
 
 fn module_to_paths<'a>(
     module: &'a Module,
-    owner: declarative::Owner<'a>,
-) -> impl Iterator<Item = (&'a Path, PathType, declarative::Properties<'a>)> {
+    owner: decl::Owner<'a>,
+) -> impl Iterator<Item = (&'a Path, PathType, decl::Props<'a>)> {
     [
         (&module.cache, StorageClass::Cache),
         (&module.data, StorageClass::Data),
@@ -140,7 +140,7 @@ fn module_to_paths<'a>(
     .flat_map(move |(path_set, storage_class)| {
         path_set_to_paths(
             path_set,
-            declarative::Properties {
+            decl::Props {
                 owner,
                 storage_class,
             },
@@ -150,12 +150,12 @@ fn module_to_paths<'a>(
 
 fn path_set_to_paths<'a>(
     path_set: &'a Paths,
-    properties: declarative::Properties<'a>,
-) -> impl Iterator<Item = (&'a Path, PathType, declarative::Properties<'a>)> {
+    props: decl::Props<'a>,
+) -> impl Iterator<Item = (&'a Path, PathType, decl::Props<'a>)> {
     [
         (
             &path_set.directories,
-            PathType::Directory(DirectoryProperties {
+            PathType::Dir(DirProps {
                 owns_contents: true,
             }),
         ),
@@ -166,6 +166,6 @@ fn path_set_to_paths<'a>(
     .flat_map(move |(paths, path_type)| {
         paths
             .iter()
-            .map(move |path| (path.as_ref(), path_type, properties))
+            .map(move |path| (path.as_ref(), path_type, props))
     })
 }

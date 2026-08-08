@@ -1,15 +1,15 @@
 pub mod tmpfiles;
 pub mod tree;
 
-pub type Tree<'a> = tree::Tree<Properties<'a>>;
+pub type Tree<'a> = tree::Tree<Props<'a>>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Entry<P> {
     pub maybe_path_type: Option<PathType>,
-    pub maybe_properties: Option<P>,
+    pub maybe_props: Option<P>,
 }
 
-pub type PathType = crate::fs::Entry<DirectoryProperties, FileType>;
+pub type PathType = crate::fs::Entry<DirProps, FileType>;
 pub type ExpectedPathType = crate::fs::Entry<(), FileType>;
 
 impl PathType {
@@ -19,7 +19,7 @@ impl PathType {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
-pub struct DirectoryProperties {
+pub struct DirProps {
     pub owns_contents: bool,
 }
 
@@ -46,7 +46,7 @@ impl StorageClass {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
-pub struct Properties<'a> {
+pub struct Props<'a> {
     pub owner: Owner<'a>,
     pub storage_class: StorageClass,
 }

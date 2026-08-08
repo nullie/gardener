@@ -1,22 +1,22 @@
 use std::{collections::BTreeMap, ffi::OsString};
 
 use crate::{
-    declarative::{self, DirectoryProperties, FileType, PathType},
+    decl::{self, DirProps, FileType, PathType},
     fs::{self},
 };
 
 pub type NodeChildren<P> = BTreeMap<OsString, Node<P>>;
 
-pub type Node<P> = fs::Entry<Directory<P>, File<P>>;
+pub type Node<P> = fs::Entry<Dir<P>, File<P>>;
 
-pub struct Directory<P> {
+pub struct Dir<P> {
     pub children: NodeChildren<P>,
     pub kind: DirKind<P>,
 }
 
 pub struct File<P> {
     pub file_type: FileType,
-    pub properties: P,
+    pub props: P,
 }
 
 #[derive(Debug)]
@@ -27,26 +27,23 @@ pub enum DirKind<P> {
 
 impl<P: Copy> Node<P> {
     pub(crate) fn intermediate() -> Self {
-        fs::Entry::Directory(Directory {
+        fs::Entry::Dir(Dir {
             children: BTreeMap::new(),
             kind: DirKind::Empty(None),
         })
     }
 
-    pub(crate) fn new(path_type: declarative::PathType, properties: P) -> Self {
+    pub(crate) fn new(path_type: decl::PathType, props: P) -> Self {
         path_type
-            .map_dir(|d| Directory {
+            .map_dir(|d| Dir {
                 children: BTreeMap::new(),
                 kind: if d.owns_contents {
-                    DirKind::OwnsContents(properties)
+                    DirKind::OwnsContents(props)
                 } else {
-                    DirKind::Empty(Some(properties))
+                    DirKind::Empty(Some(props))
                 },
             })
-            .map_file(|file_type| File {
-                file_type,
-                properties,
-            })
+            .map_file(|file_type| File { file_type, props })
     }
 
     pub fn get_children(&self) -> Option<&NodeChildren<P>> {
@@ -55,7 +52,7 @@ impl<P: Copy> Node<P> {
 
     pub fn path_type(&self) -> PathType {
         self.as_ref()
-            .map_dir(|d| DirectoryProperties {
+            .map_dir(|d| DirProps {
                 owns_contents: match d.kind {
                     DirKind::OwnsContents(_) => true,
                     DirKind::Empty(_) => false,
@@ -64,19 +61,19 @@ impl<P: Copy> Node<P> {
             .map_file(|f| f.file_type)
     }
 
-    pub fn get_properties(&self) -> Option<P> {
+    pub fn get_props(&self) -> Option<P> {
         self.as_ref()
-            .map_dir(|d| d.kind.get_properties())
-            .map_file(|f| Some(f.properties))
+            .map_dir(|d| d.kind.get_props())
+            .map_file(|f| Some(f.props))
             .unwrap_either()
     }
 }
 
 impl<P: Copy> DirKind<P> {
-    fn get_properties(&self) -> Option<P> {
+    fn get_props(&self) -> Option<P> {
         match *self {
-            DirKind::Empty(maybe_properties) => maybe_properties,
-            DirKind::OwnsContents(properties) => Some(properties),
+            DirKind::Empty(maybe_props) => maybe_props,
+            DirKind::OwnsContents(props) => Some(props),
         }
     }
 }

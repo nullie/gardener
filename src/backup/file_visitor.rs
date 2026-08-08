@@ -3,7 +3,7 @@ use std::{ops::ControlFlow, path::Path};
 use rootcause::Result;
 
 use crate::{
-    declarative::{self, Properties},
+    decl::{self, Props},
     fs::unix,
 };
 
@@ -13,7 +13,7 @@ pub trait Reporter {
         path: &std::path::Path,
         file_type: unix::FileType,
         len: u64,
-        maybe_properties: Option<Properties>,
+        maybe_props: Option<Props>,
     );
 }
 
@@ -26,11 +26,7 @@ impl<R: Reporter> Visitor<R> {
         Self { reporter }
     }
 
-    pub fn visit_fs(
-        path: &std::path::Path,
-        tree: &crate::declarative::Tree,
-        reporter: R,
-    ) -> Result<R> {
+    pub fn visit_fs(path: &std::path::Path, tree: &crate::decl::Tree, reporter: R) -> Result<R> {
         let mut visitor = Visitor::new(reporter);
 
         unix::walker::walk_tree(path, tree, &mut visitor)?;
@@ -39,17 +35,17 @@ impl<R: Reporter> Visitor<R> {
     }
 }
 
-impl<'a, R: Reporter> unix::walker::Visitor<Properties<'a>> for Visitor<R> {
+impl<'a, R: Reporter> unix::walker::Visitor<Props<'a>> for Visitor<R> {
     fn visit_dir(
         &mut self,
         _path: &Path,
-        declared: declarative::Entry<Properties>,
+        declared: decl::Entry<Props>,
         has_declared_children: bool,
     ) -> ControlFlow<(), ()> {
         if has_declared_children
             || declared
-                .maybe_properties
-                .is_none_or(|properties| properties.storage_class.should_backup())
+                .maybe_props
+                .is_none_or(|props| props.storage_class.should_backup())
         {
             ControlFlow::Continue(())
         } else {
@@ -61,19 +57,19 @@ impl<'a, R: Reporter> unix::walker::Visitor<Properties<'a>> for Visitor<R> {
         &mut self,
         path: &Path,
         file_type: unix::FileType,
-        declared: declarative::Entry<Properties>,
+        declared: decl::Entry<Props>,
         len: u64,
     ) {
         if declared
-            .maybe_properties
-            .is_none_or(|properties| properties.storage_class.should_backup())
+            .maybe_props
+            .is_none_or(|props| props.storage_class.should_backup())
         {
             self.reporter
-                .report_file(path, file_type, len, declared.maybe_properties);
+                .report_file(path, file_type, len, declared.maybe_props);
         }
     }
 
     fn visit_error(&mut self, dir: &std::path::Path, e: std::io::Error) {
-        eprintln!("Failed to read directory {:?}: {}", dir, e);
+        eprintln!("Failed to read dir {:?}: {}", dir, e);
     }
 }

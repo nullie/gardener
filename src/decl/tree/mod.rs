@@ -9,7 +9,7 @@ use std::{
 use thiserror::Error;
 
 pub use self::node::{DirKind, Node, NodeChildren};
-use crate::declarative::{self, PathType};
+use crate::decl::{self, PathType};
 
 pub struct Tree<P> {
     pub root: NodeChildren<P>,
@@ -43,30 +43,30 @@ impl<P: Copy + std::fmt::Debug> Tree<P> {
     pub fn add_path(
         &mut self,
         path: &Path,
-        path_type: declarative::PathType,
-        properties: P,
+        path_type: decl::PathType,
+        props: P,
     ) -> Result<(), TreeError<'_, P>> {
         self.add_path_by_components(
             Self::path_to_components(path)?.into_iter(),
             path_type,
-            properties,
+            props,
         )
     }
 
     fn add_path_by_components(
         &mut self,
         mut components: impl DoubleEndedIterator<Item = OsString>,
-        path_type: declarative::PathType,
-        properties: P,
+        path_type: decl::PathType,
+        props: P,
     ) -> Result<(), TreeError<'_, P>> {
-        let mut directory = &mut self.root;
+        let mut dir = &mut self.root;
 
         let Some(last_component) = components.next_back() else {
             return Err(TreeError::EmptyPath);
         };
 
         for component in &mut components {
-            let entry = directory.entry(component);
+            let entry = dir.entry(component);
 
             match entry {
                 btree_map::Entry::Vacant(vacant_entry) => {
@@ -75,12 +75,12 @@ impl<P: Copy + std::fmt::Debug> Tree<P> {
                         components,
                         last_component,
                         path_type,
-                        properties,
+                        props,
                     );
                 }
                 btree_map::Entry::Occupied(occupied_entry) => match occupied_entry.into_mut() {
-                    Node::Directory(node::Directory { children, .. }) => {
-                        directory = children;
+                    Node::Dir(node::Dir { children, .. }) => {
+                        dir = children;
                     }
                     Node::File { .. } => return Err(TreeError::ConflictingPathType),
                 },
@@ -90,9 +90,9 @@ impl<P: Copy + std::fmt::Debug> Tree<P> {
         // The cycle above should only complete by consuming all components
         assert!(components.next().is_none());
 
-        match directory.entry(last_component) {
+        match dir.entry(last_component) {
             btree_map::Entry::Vacant(vacant) => {
-                vacant.insert(Node::new(path_type, properties));
+                vacant.insert(Node::new(path_type, props));
 
                 Ok(())
             }
@@ -100,14 +100,14 @@ impl<P: Copy + std::fmt::Debug> Tree<P> {
                 let occupied = occupied.into_mut();
 
                 match (occupied, path_type) {
-                    (Node::Directory(existing), PathType::Directory(new)) => {
-                        Self::merge_dirs(&mut existing.kind, new.owns_contents, properties)
+                    (Node::Dir(existing), PathType::Dir(new)) => {
+                        Self::merge_dirs(&mut existing.kind, new.owns_contents, props)
                     }
                     (occupied, path_type) => {
                         let existing_path_type = occupied.path_type();
 
                         if existing_path_type == path_type {
-                            todo!("handle existing properties");
+                            todo!("handle existing props");
                         } else {
                             Err(TreeError::ConflictingPathType)
                         }
@@ -121,19 +121,18 @@ impl<P: Copy + std::fmt::Debug> Tree<P> {
         vacant_entry: btree_map::VacantEntry<'_, OsString, Node<P>>,
         remaining_intermediate: impl DoubleEndedIterator<Item = OsString>,
         last_component: OsString,
-        path_type: declarative::PathType,
-        properties: P,
+        path_type: decl::PathType,
+        props: P,
     ) -> Result<(), TreeError<'_, P>> {
-        let Node::Directory(node::Directory { children, .. }) =
-            vacant_entry.insert(Node::intermediate())
+        let Node::Dir(node::Dir { children, .. }) = vacant_entry.insert(Node::intermediate())
         else {
             unreachable!();
         };
 
-        let mut directory = children;
+        let mut dir = children;
 
         for component in remaining_intermediate {
-            let Node::Directory(node::Directory { children, .. }) = directory
+            let Node::Dir(node::Dir { children, .. }) = dir
                 .entry(component)
                 .insert_entry(Node::intermediate())
                 .into_mut()
@@ -141,12 +140,11 @@ impl<P: Copy + std::fmt::Debug> Tree<P> {
                 unreachable!()
             };
 
-            directory = children;
+            dir = children;
         }
 
         assert!(
-            directory
-                .insert(last_component, Node::new(path_type, properties))
+            dir.insert(last_component, Node::new(path_type, props))
                 .is_none()
         );
 
@@ -156,19 +154,19 @@ impl<P: Copy + std::fmt::Debug> Tree<P> {
     fn merge_dirs(
         existing_kind: &mut DirKind<P>,
         owns_contents: bool,
-        properties: P,
+        props: P,
     ) -> Result<(), TreeError<'_, P>> {
         if matches!(
             existing_kind,
             DirKind::OwnsContents(_) | DirKind::Empty(Some(_))
         ) {
             match existing_kind {
-                DirKind::OwnsContents(existing_properties) => {
-                    return Err(TreeError::ExistingProperties(existing_properties));
+                DirKind::OwnsContents(existing_props) => {
+                    return Err(TreeError::ExistingProps(existing_props));
                 }
-                DirKind::Empty(maybe_properties) => match maybe_properties {
-                    Some(existing_properties) => {
-                        return Err(TreeError::ExistingProperties(existing_properties));
+                DirKind::Empty(maybe_props) => match maybe_props {
+                    Some(existing_props) => {
+                        return Err(TreeError::ExistingProps(existing_props));
                     }
                     None => unreachable!(),
                 },
@@ -176,7 +174,7 @@ impl<P: Copy + std::fmt::Debug> Tree<P> {
         }
 
         if owns_contents {
-            *existing_kind = DirKind::OwnsContents(properties);
+            *existing_kind = DirKind::OwnsContents(props);
         }
 
         Ok(())
@@ -189,8 +187,8 @@ pub enum TreeError<'a, P: std::fmt::Debug> {
     EmptyPath,
     #[error("path is relative")]
     RelativePath,
-    #[error("conflicting properties: {0:?}")]
-    ExistingProperties(&'a mut P),
+    #[error("conflicting props: {0:?}")]
+    ExistingProps(&'a mut P),
     #[error("path is overlapping")]
     ConflictingPathType,
     #[error("unexpected component")]

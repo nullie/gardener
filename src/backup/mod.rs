@@ -6,7 +6,7 @@ use rootcause::Result;
 
 use crate::{
     config::Config,
-    declarative::Properties,
+    decl::Props,
     fs::{self, unix},
     presentation::UntrackedPath,
 };
@@ -28,14 +28,14 @@ impl file_visitor::Reporter for LsReporter {
         path: &std::path::Path,
         file_type: unix::FileType,
         len: u64,
-        maybe_properties: Option<Properties>,
+        maybe_props: Option<Props>,
     ) {
-        if maybe_properties.is_none_or(|properties| properties.storage_class.should_backup()) {
+        if maybe_props.is_none_or(|props| props.storage_class.should_backup()) {
             println!(
                 "{}: {} {:?}",
                 UntrackedPath::new(path, fs::Entry::File(file_type)),
                 len,
-                maybe_properties
+                maybe_props
             );
         }
     }
@@ -71,7 +71,7 @@ impl file_visitor::Reporter for SizeReporter {
         _path: &std::path::Path,
         _file_type: unix::FileType,
         len: u64,
-        _maybe_properties: Option<Properties>,
+        _maybe_props: Option<Props>,
     ) {
         self.size += len;
     }

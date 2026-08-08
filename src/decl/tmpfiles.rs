@@ -2,9 +2,9 @@ use std::path::Path;
 
 use systemd_tmpfiles::Directive;
 
-use crate::declarative::{self, FileType, Owner, PathType};
+use crate::decl::{self, FileType, Owner, PathType};
 
-pub fn add_systemd_tmpfiles(tree: &mut declarative::Tree) -> rootcause::Result<()> {
+pub fn add_systemd_tmpfiles(tree: &mut decl::Tree) -> rootcause::Result<()> {
     let owner = Owner::AdhocSystem {
         name: "systemd-tmpfiles",
     };
@@ -29,7 +29,7 @@ pub fn add_systemd_tmpfiles(tree: &mut declarative::Tree) -> rootcause::Result<(
             Directive::CreateCharDeviceNode { .. } => Some(PathType::File(FileType::CharDevice)),
             Directive::CreateBlockDeviceNode { .. } => Some(PathType::File(FileType::BlockDevice)),
             Directive::CreateDirectory { .. } | Directive::CreateSubvolume { .. } => {
-                Some(PathType::Directory(declarative::DirectoryProperties {
+                Some(PathType::Dir(decl::DirProps {
                     owns_contents: false,
                 }))
             }
@@ -41,14 +41,14 @@ pub fn add_systemd_tmpfiles(tree: &mut declarative::Tree) -> rootcause::Result<(
             assert!(!entry.path_is_glob());
 
             let path = Path::new(entry.path());
-            let properties = declarative::Properties {
+            let props = decl::Props {
                 owner,
-                storage_class: declarative::StorageClass::Ephemeral,
+                storage_class: decl::StorageClass::Ephemeral,
             };
 
-            tree.add_path(path, path_type, properties)
+            tree.add_path(path, path_type, props)
                 .or_else(|tree_error| match tree_error {
-                    declarative::tree::TreeError::ExistingProperties(_existing_properties) => {
+                    decl::tree::TreeError::ExistingProps(_existing_props) => {
                         // systemd-tmpfiles are added after declared ones and should not
                         // override them
                         Ok(())

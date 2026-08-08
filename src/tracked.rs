@@ -2,20 +2,20 @@ use std::{borrow::Cow, io};
 
 use crate::{
     config::Config,
-    declarative::{FileType, PathType},
+    decl::{FileType, PathType},
 };
 
 pub fn check_tracked() -> rootcause::Result<()> {
     let config = Config::load()?;
 
-    for (path, path_type, properties) in config.paths() {
-        if !properties.owner.enabled() {
+    for (path, path_type, props) in config.paths() {
+        if !props.owner.enabled() {
             continue;
         }
 
         let err_message = match path.symlink_metadata() {
             Ok(metadata) => (match path_type {
-                PathType::Directory { .. } => (!metadata.is_dir()).then_some("not a directory"),
+                PathType::Dir { .. } => (!metadata.is_dir()).then_some("not a dir"),
                 PathType::File(FileType::Regular) => (!metadata.is_file()).then_some("not a file"),
                 PathType::File(FileType::Symlink) => {
                     (!metadata.is_symlink()).then_some("not a symlink")
