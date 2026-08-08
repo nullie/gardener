@@ -8,7 +8,7 @@ use std::{
 
 use thiserror::Error;
 
-pub use self::node::{Node, NodeChildren, NodeKind};
+pub use self::node::{DirKind, Node, NodeChildren};
 use crate::declarative::{self, PathType};
 
 pub struct Tree<P> {
@@ -79,7 +79,7 @@ impl<P: Copy + std::fmt::Debug> Tree<P> {
                     );
                 }
                 btree_map::Entry::Occupied(occupied_entry) => match occupied_entry.into_mut() {
-                    Node::Directory { children, .. } => {
+                    Node::Directory(node::Directory { children, .. }) => {
                         directory = children;
                     }
                     Node::File { .. } => return Err(TreeError::ConflictingPathType),
@@ -100,10 +100,9 @@ impl<P: Copy + std::fmt::Debug> Tree<P> {
                 let occupied = occupied.into_mut();
 
                 match (occupied, path_type) {
-                    (
-                        Node::Directory { kind, .. },
-                        PathType::Directory(declarative::DirectoryProperties { owns_contents }),
-                    ) => Self::merge_dirs(kind, owns_contents, properties),
+                    (Node::Directory(existing), PathType::Directory(new)) => {
+                        Self::merge_dirs(&mut existing.kind, new.owns_contents, properties)
+                    }
                     (occupied, path_type) => {
                         let existing_path_type = occupied.path_type();
 
@@ -125,14 +124,16 @@ impl<P: Copy + std::fmt::Debug> Tree<P> {
         path_type: declarative::PathType,
         properties: P,
     ) -> Result<(), TreeError<'_, P>> {
-        let Node::Directory { children, .. } = vacant_entry.insert(Node::intermediate()) else {
+        let Node::Directory(node::Directory { children, .. }) =
+            vacant_entry.insert(Node::intermediate())
+        else {
             unreachable!();
         };
 
         let mut directory = children;
 
         for component in remaining_intermediate {
-            let Node::Directory { children, .. } = directory
+            let Node::Directory(node::Directory { children, .. }) = directory
                 .entry(component)
                 .insert_entry(Node::intermediate())
                 .into_mut()
@@ -153,19 +154,19 @@ impl<P: Copy + std::fmt::Debug> Tree<P> {
     }
 
     fn merge_dirs(
-        existing_kind: &mut NodeKind<P>,
+        existing_kind: &mut DirKind<P>,
         owns_contents: bool,
         properties: P,
     ) -> Result<(), TreeError<'_, P>> {
         if matches!(
             existing_kind,
-            NodeKind::OwnsContents(_) | NodeKind::Empty(Some(_))
+            DirKind::OwnsContents(_) | DirKind::Empty(Some(_))
         ) {
             match existing_kind {
-                NodeKind::OwnsContents(existing_properties) => {
+                DirKind::OwnsContents(existing_properties) => {
                     return Err(TreeError::ExistingProperties(existing_properties));
                 }
-                NodeKind::Empty(maybe_properties) => match maybe_properties {
+                DirKind::Empty(maybe_properties) => match maybe_properties {
                     Some(existing_properties) => {
                         return Err(TreeError::ExistingProperties(existing_properties));
                     }
@@ -175,7 +176,7 @@ impl<P: Copy + std::fmt::Debug> Tree<P> {
         }
 
         if owns_contents {
-            *existing_kind = NodeKind::OwnsContents(properties);
+            *existing_kind = DirKind::OwnsContents(properties);
         }
 
         Ok(())

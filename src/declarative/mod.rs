@@ -14,10 +14,7 @@ pub type ExpectedPathType = crate::fs::Entry<(), FileType>;
 
 impl PathType {
     pub fn expected_path_type(self) -> ExpectedPathType {
-        match self {
-            Self::Directory(_) => ExpectedPathType::Directory(()),
-            Self::File(file_type) => ExpectedPathType::File(file_type),
-        }
+        self.map_dir(|_| ())
     }
 }
 

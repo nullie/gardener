@@ -14,10 +14,9 @@ pub type PathType = super::Entry<(), FileType>;
 
 impl PathType {
     pub fn from_declarative_path_type(declared_path_type: declarative::PathType) -> Self {
-        match declared_path_type {
-            declarative::PathType::Directory(_) => Self::Directory(()),
-            declarative::PathType::File(file_type) => Self::File(FileType::Declarative(file_type)),
-        }
+        declared_path_type
+            .map_dir(|_| ())
+            .map_file(FileType::Declarative)
     }
 
     pub fn from_std_file_type(std_file_type: std::fs::FileType) -> Self {

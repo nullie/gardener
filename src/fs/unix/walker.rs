@@ -87,8 +87,8 @@ fn process_entry<P: Copy + std::fmt::Debug>(
 
     let maybe_children = maybe_tree_node.and_then(|tree_node| tree_node.get_children());
 
-    match path_type {
-        crate::fs::Entry::Directory(()) => {
+    path_type
+        .map_dir(|()| {
             if visitor
                 .visit_dir(
                     &path,
@@ -97,13 +97,8 @@ fn process_entry<P: Copy + std::fmt::Debug>(
                 )
                 .is_continue()
             {
-                let propagate_properties = match maybe_declared_path_type {
-                    Some(crate::fs::Entry::Directory(declarative::DirectoryProperties {
-                        owns_contents,
-                    })) => owns_contents,
-                    None => true,
-                    _ => false,
-                };
+                let propagate_properties = maybe_declared_path_type
+                    .is_some_and(|path_type| path_type.map_dir_or(false, |d| d.owns_contents));
 
                 walk_dir(
                     &path,
@@ -116,11 +111,13 @@ fn process_entry<P: Copy + std::fmt::Debug>(
                     visitor,
                 )?;
             }
-        }
-        crate::fs::Entry::File(file_type) => {
-            visitor.visit_file(&path, file_type, declared, metadata.len());
-        }
-    }
 
-    Ok(())
+            Ok(())
+        })
+        .map_file(|file_type| {
+            visitor.visit_file(&path, file_type, declared, metadata.len());
+
+            Ok(())
+        })
+        .unwrap_either()
 }

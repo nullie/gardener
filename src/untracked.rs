@@ -8,7 +8,7 @@ use rootcause::Result;
 
 use crate::{
     config::Config,
-    declarative::{self, Owner, PathType, Properties},
+    declarative::{self, Owner, Properties},
     fs::{self, unix},
     presentation::UntrackedPath,
 };
@@ -236,8 +236,8 @@ impl<'a> unix::walker::Visitor<Properties<'a>> for UntrackedVisitor<'a> {
         self.check_path(path, unix::PathType::Directory(()), declared)?;
 
         if let Some(declared_path_type) = declared.maybe_path_type {
-            match declared_path_type {
-                PathType::Directory(declarative::DirectoryProperties { owns_contents }) => {
+            declared_path_type
+                .map_dir(|d| {
                     if let Some(properties) = declared.maybe_properties {
                         // If not enabled, then it's untracked
                         if !properties.owner.enabled() {
@@ -248,7 +248,7 @@ impl<'a> unix::walker::Visitor<Properties<'a>> for UntrackedVisitor<'a> {
                             );
 
                             ControlFlow::Break(())
-                        } else if !owns_contents {
+                        } else if !d.owns_contents {
                             // Recurse to discover untracked files
                             ControlFlow::Continue(())
                         } else {
@@ -258,8 +258,8 @@ impl<'a> unix::walker::Visitor<Properties<'a>> for UntrackedVisitor<'a> {
                     } else {
                         ControlFlow::Continue(())
                     }
-                }
-                PathType::File(_) => {
+                })
+                .map_file(|_| {
                     self.report_mismatching_path(
                         path,
                         declared.maybe_properties,
@@ -268,8 +268,8 @@ impl<'a> unix::walker::Visitor<Properties<'a>> for UntrackedVisitor<'a> {
                     );
 
                     ControlFlow::Break(())
-                }
-            }
+                })
+                .unwrap_either()
         } else {
             self.report_untracked_path(path, None, unix::PathType::Directory(()));
             ControlFlow::Break(())
