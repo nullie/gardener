@@ -188,16 +188,17 @@ impl<'a> UntrackedVisitor<'a> {
 
     fn check_path<'b>(
         &'b mut self,
-        entry: fs::Entry<Properties<'a>>,
+        path: &Path,
         path_type: fs::PathType,
+        declared: fs::DeclaredEntry<Properties<'a>>,
     ) -> ControlFlow<(), ()> {
-        if let Some(declared_path_type) = entry.maybe_path_type {
+        if let Some(declared_path_type) = declared.maybe_path_type {
             let expected_path_type = fs::PathType::from(declared_path_type);
 
             if expected_path_type != path_type {
                 self.report_mismatching_path(
-                    entry.path,
-                    entry.maybe_properties,
+                    path,
+                    declared.maybe_properties,
                     expected_path_type,
                     path_type,
                 );
@@ -206,17 +207,17 @@ impl<'a> UntrackedVisitor<'a> {
             }
         }
 
-        if entry.maybe_path_type.is_none() {
-            self.report_untracked_path(entry.path, entry.maybe_properties, path_type);
+        if declared.maybe_path_type.is_none() {
+            self.report_untracked_path(path, declared.maybe_properties, path_type);
 
             return ControlFlow::Break(());
         }
 
-        if entry
+        if declared
             .maybe_properties
             .is_some_and(|properties| !properties.owner.enabled())
         {
-            self.report_untracked_path(entry.path, entry.maybe_properties, path_type);
+            self.report_untracked_path(path, declared.maybe_properties, path_type);
 
             return ControlFlow::Break(());
         }
@@ -228,20 +229,21 @@ impl<'a> UntrackedVisitor<'a> {
 impl<'a> fs::Visitor<Properties<'a>> for UntrackedVisitor<'a> {
     fn visit_dir(
         &mut self,
-        entry: fs::Entry<Properties<'a>>,
+        path: &Path,
+        declared: fs::DeclaredEntry<Properties<'a>>,
         _has_declared_children: bool,
     ) -> ControlFlow<(), ()> {
-        self.check_path(entry, fs::PathType::Directory)?;
+        self.check_path(path, fs::PathType::Directory, declared)?;
 
-        if let Some(declared_path_type) = entry.maybe_path_type {
+        if let Some(declared_path_type) = declared.maybe_path_type {
             match declared_path_type {
                 PathType::Directory { owns_contents } => {
-                    if let Some(properties) = entry.maybe_properties {
+                    if let Some(properties) = declared.maybe_properties {
                         // If not enabled, then it's untracked
                         if !properties.owner.enabled() {
                             self.report_untracked_path(
-                                entry.path,
-                                entry.maybe_properties,
+                                path,
+                                declared.maybe_properties,
                                 fs::PathType::Directory,
                             );
 
@@ -259,8 +261,8 @@ impl<'a> fs::Visitor<Properties<'a>> for UntrackedVisitor<'a> {
                 }
                 PathType::File(_) => {
                     self.report_mismatching_path(
-                        entry.path,
-                        entry.maybe_properties,
+                        path,
+                        declared.maybe_properties,
                         declared_path_type.into(),
                         fs::PathType::Directory,
                     );
@@ -269,33 +271,39 @@ impl<'a> fs::Visitor<Properties<'a>> for UntrackedVisitor<'a> {
                 }
             }
         } else {
-            self.report_untracked_path(entry.path, None, fs::PathType::Directory);
+            self.report_untracked_path(path, None, fs::PathType::Directory);
             ControlFlow::Break(())
         }
     }
 
-    fn visit_file(&mut self, entry: fs::Entry<Properties<'a>>, file_type: fs::FileType, _len: u64) {
-        if let Some(declared_path_type) = entry.maybe_path_type {
+    fn visit_file(
+        &mut self,
+        path: &Path,
+        file_type: fs::FileType,
+        declared: fs::DeclaredEntry<Properties<'a>>,
+        _len: u64,
+    ) {
+        if let Some(declared_path_type) = declared.maybe_path_type {
             let expected_path_type = fs::PathType::from(declared_path_type);
             let path_type = fs::PathType::from(file_type);
 
             if expected_path_type != path_type {
                 self.report_mismatching_path(
-                    entry.path,
-                    entry.maybe_properties,
+                    path,
+                    declared.maybe_properties,
                     expected_path_type,
                     path_type,
                 );
             }
         }
 
-        if entry
+        if declared
             .maybe_properties
             .is_none_or(|properties| !properties.owner.enabled())
         {
             self.report_untracked_path(
-                entry.path,
-                entry.maybe_properties,
+                path,
+                declared.maybe_properties,
                 fs::PathType::from(file_type),
             );
         }

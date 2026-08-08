@@ -6,16 +6,25 @@ use crate::declarative::{
 };
 
 pub trait Visitor<P> {
-    fn visit_dir(&mut self, declared: Entry<P>, has_declared_children: bool)
-    -> ControlFlow<(), ()>;
-    fn visit_file(&mut self, declared: Entry<P>, file_type: FileType, len: u64);
+    fn visit_dir(
+        &mut self,
+        path: &Path,
+        declared: DeclaredEntry<P>,
+        has_declared_children: bool,
+    ) -> ControlFlow<(), ()>;
+    fn visit_file(
+        &mut self,
+        path: &Path,
+        file_type: FileType,
+        declared: DeclaredEntry<P>,
+        len: u64,
+    );
     fn visit_error(&mut self, dir: &Path, e: std::io::Error);
 }
 
 // TODO: move to declared
-#[derive(Debug, Clone, Copy)]
-pub struct Entry<'a, P> {
-    pub path: &'a Path,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeclaredEntry<P> {
     pub maybe_path_type: Option<declarative::PathType>,
     pub maybe_properties: Option<P>,
 }
@@ -78,8 +87,7 @@ fn process_entry<P: Copy + std::fmt::Debug>(
         .or(inherited_properties);
 
     let maybe_declared_path_type = maybe_tree_node.map(|tree_node| tree_node.path_type());
-    let entry = Entry {
-        path: &path,
+    let declared = DeclaredEntry {
         maybe_path_type: maybe_declared_path_type,
         maybe_properties: maybe_declared_properties,
     };
@@ -90,7 +98,8 @@ fn process_entry<P: Copy + std::fmt::Debug>(
         PathType::Directory => {
             if visitor
                 .visit_dir(
-                    entry,
+                    &path,
+                    declared,
                     maybe_children.is_some_and(|children| !children.is_empty()),
                 )
                 .is_continue()
@@ -114,7 +123,7 @@ fn process_entry<P: Copy + std::fmt::Debug>(
             }
         }
         PathType::File(file_type) => {
-            visitor.visit_file(entry, file_type, metadata.len());
+            visitor.visit_file(&path, file_type, declared, metadata.len());
         }
     }
 

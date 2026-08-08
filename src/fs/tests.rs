@@ -1,6 +1,6 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use serde::de;
+use pretty_assertions::assert_eq;
 use tempdir::TempDir;
 
 use crate::{
@@ -34,12 +34,11 @@ fn test_visitor() {
     test_tree.dir("/owning/inside-dir/nested-owning", true, "neseted-owning");
     test_tree.file("/non-dir/inside-non-dir", "inside-non-dir");
 
-    super::walk_tree(
-        test_directory.path(),
-        &test_tree.tree,
-        &mut TestVisitor::new(),
-    )
-    .unwrap();
+    let mut visitor = TestVisitor::new();
+    super::walk_tree(test_directory.path(), &test_tree.tree, &mut visitor)
+        .expect("walk_tree failed");
+
+    assert_eq!(visitor.visits, vec![]);
 }
 
 struct TestDirectory {
@@ -105,33 +104,51 @@ impl<P: Copy + std::fmt::Debug> TestTree<P> {
     }
 }
 
-struct TestVisitor<'a, P> {
-    visits: Vec<TestVisit<'a, P>>,
+struct TestVisitor<P> {
+    visits: Vec<TestVisit<P>>,
 }
 
-impl<'a, P> TestVisitor<'a, P> {
+impl<P> TestVisitor<P> {
     fn new() -> Self {
         Self { visits: Vec::new() }
     }
 }
 
-struct TestVisit<'a, P> {
-    path_type: fs::Entry<'a, P>,
+#[derive(PartialEq, Eq, Debug)]
+struct TestVisit<P> {
+    path: PathBuf,
+    path_type: fs::PathType,
+    declared: fs::DeclaredEntry<P>,
 }
 
-impl<'a, P> fs::Visitor<P> for TestVisitor<'a, P> {
+impl<'a, P> fs::Visitor<P> for TestVisitor<P> {
     fn visit_dir(
         &mut self,
-        declared: fs::Entry<P>,
+        path: &Path,
+        declared: fs::DeclaredEntry<P>,
         has_declared_children: bool,
     ) -> std::ops::ControlFlow<(), ()> {
-        println!("{}", declared.path.display());
+        self.visits.push(TestVisit {
+            path: path.to_owned(),
+            path_type: fs::PathType::Directory,
+            declared,
+        });
 
         std::ops::ControlFlow::Continue(())
     }
 
-    fn visit_file(&mut self, declared: fs::Entry<P>, file_type: fs::FileType, len: u64) {
-        println!("{}", declared.path.display());
+    fn visit_file(
+        &mut self,
+        path: &Path,
+        file_type: fs::FileType,
+        declared: fs::DeclaredEntry<P>,
+        len: u64,
+    ) {
+        self.visits.push(TestVisit {
+            path: path.to_owned(),
+            path_type: fs::PathType::File(file_type),
+            declared,
+        });
     }
 
     fn visit_error(&mut self, dir: &Path, e: std::io::Error) {

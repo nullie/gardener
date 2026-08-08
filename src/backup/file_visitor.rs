@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use std::{ops::ControlFlow, path::Path};
 
 use rootcause::Result;
 
@@ -39,11 +39,12 @@ impl<R: Reporter> Visitor<R> {
 impl<'a, R: Reporter> fs::Visitor<Properties<'a>> for Visitor<R> {
     fn visit_dir(
         &mut self,
-        entry: fs::Entry<Properties>,
+        _path: &Path,
+        declared: fs::DeclaredEntry<Properties>,
         has_declared_children: bool,
     ) -> ControlFlow<(), ()> {
         if has_declared_children
-            || entry
+            || declared
                 .maybe_properties
                 .is_none_or(|properties| properties.storage_class.should_backup())
         {
@@ -53,13 +54,19 @@ impl<'a, R: Reporter> fs::Visitor<Properties<'a>> for Visitor<R> {
         }
     }
 
-    fn visit_file(&mut self, entry: fs::Entry<Properties>, file_type: fs::FileType, len: u64) {
-        if entry
+    fn visit_file(
+        &mut self,
+        path: &Path,
+        file_type: fs::FileType,
+        declared: fs::DeclaredEntry<Properties>,
+        len: u64,
+    ) {
+        if declared
             .maybe_properties
             .is_none_or(|properties| properties.storage_class.should_backup())
         {
             self.reporter
-                .report_file(entry.path, file_type, len, entry.maybe_properties);
+                .report_file(path, file_type, len, declared.maybe_properties);
         }
     }
 
