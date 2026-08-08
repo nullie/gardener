@@ -27,7 +27,7 @@ impl<P: Copy + std::fmt::Debug> Tree<P> {
         let mut components = path.components();
 
         if components.next() != Some(std::path::Component::RootDir) {
-            panic!("Path must be absolute");
+            return Err(TreeError::RelativePath);
         }
 
         let intermediate: Vec<OsString> = components
@@ -185,6 +185,8 @@ impl<P: Copy + std::fmt::Debug> Tree<P> {
 pub enum TreeError<'a, P: std::fmt::Debug> {
     #[error("path is empty")]
     EmptyPath,
+    #[error("path is relative")]
+    RelativePath,
     #[error("conflicting properties: {0:?}")]
     ExistingProperties(&'a mut P),
     #[error("path is overlapping")]

@@ -177,3 +177,6 @@ impl From<FileType> for PathType {
         Self::File(file_type)
     }
 }
+
+#[cfg(test)]
+mod tests;
