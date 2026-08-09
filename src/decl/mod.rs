@@ -1,3 +1,5 @@
+use crate::fs::TypeChar;
+
 pub mod tmpfiles;
 pub mod tree;
 
@@ -30,6 +32,18 @@ pub enum FileType {
     Fifo,
     CharDevice,
     BlockDevice,
+}
+
+impl TypeChar for FileType {
+    fn type_char(&self) -> char {
+        match self {
+            Self::Regular => 'f',
+            Self::Symlink => 'l',
+            Self::Fifo => 'p',
+            Self::CharDevice => 'c',
+            Self::BlockDevice => 'b',
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]

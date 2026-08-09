@@ -58,3 +58,16 @@ impl<T> Entry<T, T> {
         }
     }
 }
+
+pub trait TypeChar {
+    fn type_char(&self) -> char;
+}
+
+impl<D, F: TypeChar> TypeChar for Entry<D, F> {
+    fn type_char(&self) -> char {
+        match self {
+            Self::Dir(_) => 'd',
+            Self::File(f) => f.type_char(),
+        }
+    }
+}

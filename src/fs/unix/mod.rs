@@ -1,6 +1,9 @@
 use std::{fs, os::unix::fs::FileTypeExt};
 
-use crate::decl::{self};
+use crate::{
+    decl::{self},
+    fs::TypeChar,
+};
 
 pub mod walker;
 
@@ -38,6 +41,15 @@ impl PathType {
             };
 
             Self::File(file_type)
+        }
+    }
+}
+
+impl TypeChar for FileType {
+    fn type_char(&self) -> char {
+        match self {
+            Self::Declarative(declared_type) => declared_type.type_char(),
+            Self::Other(_file_type) => '?',
         }
     }
 }
