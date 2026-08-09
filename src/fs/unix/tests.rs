@@ -30,11 +30,12 @@ fn test_visitor() {
     test_tree.dir("/conflicting-type-file", true, "conflicting");
     test_tree.file("/conflicting-type-dir", "conflicting");
     test_tree.dir("/non-owning", false, "non-owning");
+    test_tree.file("/non-owning/intermediate/tracked", "non-owning");
     test_tree.dir("/owning", true, "owning");
-    test_tree.dir("/owning/inside-dir/nested-owning", true, "neseted-owning");
+    test_tree.dir("/owning/inside-dir/nested-owning", true, "nested-owning");
     test_tree.file("/non-dir/inside-non-dir", "inside-non-dir");
 
-    let mut visitor = TestVisitor::new();
+    let mut visitor = TestVisitor::new(test_dir.tempdir.path());
     super::walker::walk_tree(test_dir.path(), &test_tree.tree, &mut visitor)
         .expect("walk_tree failed");
 
@@ -104,24 +105,36 @@ impl<P: Copy + std::fmt::Debug> TestTree<P> {
     }
 }
 
-struct TestVisitor<P> {
+struct TestVisitor<'a, P> {
+    root: &'a Path,
     visits: Vec<TestVisit<P>>,
 }
 
-impl<P: Eq> TestVisitor<P> {
-    fn new() -> Self {
-        Self { visits: Vec::new() }
+impl<'a, P: Eq> TestVisitor<'a, P> {
+    fn new(root: &'a Path) -> Self {
+        Self {
+            root,
+            visits: Vec::new(),
+        }
+    }
+
+    fn report_visit(&mut self, path: &Path, visit: TestVisitProps, declared: decl::Entry<P>) {
+        self.visits.push(TestVisit {
+            path: Path::new("/").join(path.strip_prefix(self.root).expect("path not in root")),
+            visit,
+            declared,
+        });
     }
 }
 
 #[derive(PartialEq, Eq, Debug)]
 struct TestVisit<P> {
     path: PathBuf,
-    kind: VisitKind,
+    visit: TestVisitProps,
     declared: decl::Entry<P>,
 }
 
-type VisitKind = fs::Entry<DirVisit, FileVisit>;
+type TestVisitProps = fs::Entry<DirVisit, FileVisit>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct DirVisit {
@@ -134,20 +147,20 @@ struct FileVisit {
     len: u64,
 }
 
-impl<P: Eq> fs::unix::walker::Visitor<P> for TestVisitor<P> {
+impl<P: Eq> fs::unix::walker::Visitor<P> for TestVisitor<'_, P> {
     fn visit_dir(
         &mut self,
         path: &Path,
         declared: decl::Entry<P>,
         has_declared_children: bool,
     ) -> std::ops::ControlFlow<(), ()> {
-        self.visits.push(TestVisit {
-            path: path.to_owned(),
-            kind: VisitKind::Dir(DirVisit {
+        self.report_visit(
+            path,
+            TestVisitProps::Dir(DirVisit {
                 has_declared_children,
             }),
             declared,
-        });
+        );
 
         std::ops::ControlFlow::Continue(())
     }
@@ -159,11 +172,11 @@ impl<P: Eq> fs::unix::walker::Visitor<P> for TestVisitor<P> {
         declared: decl::Entry<P>,
         len: u64,
     ) {
-        self.visits.push(TestVisit {
-            path: path.to_owned(),
-            kind: VisitKind::File(FileVisit { file_type, len }),
+        self.report_visit(
+            path,
+            TestVisitProps::File(FileVisit { file_type, len }),
             declared,
-        });
+        );
     }
 
     fn visit_error(&mut self, _dir: &Path, _e: std::io::Error) {
