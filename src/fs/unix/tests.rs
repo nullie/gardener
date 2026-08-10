@@ -5,7 +5,7 @@ use tempdir::TempDir;
 
 use crate::{
     decl::{self},
-    fs,
+    fs::{self, TypeChar},
 };
 
 #[test]
@@ -127,11 +127,34 @@ impl<'a, P: Eq> TestVisitor<'a, P> {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq)]
 struct TestVisit<P> {
     path: PathBuf,
     visit: TestVisitProps,
     declared: decl::Entry<P>,
+}
+
+impl std::fmt::Debug for TestVisit<&str> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.path.display(), self.visit.type_char())?;
+
+        match self.visit {
+            fs::Entry::Dir(d) => write!(f, " has_children={:?}", d.has_declared_children)?,
+            fs::Entry::File(file_visit) => write!(f, " len={}", file_visit.len)?,
+        }
+
+        match self.declared.maybe_path_type {
+            Some(path_type) => match path_type {
+                fs::Entry::Dir(d) => write!(f, " d owns_contents={:?}", d.owns_contents)?,
+                fs::Entry::File(file_type) => write!(f, " {}", file_type.type_char())?,
+            },
+            None => write!(f, " none")?,
+        }
+
+        write!(f, " {:?}", self.declared.maybe_props)?;
+
+        Ok(())
+    }
 }
 
 type TestVisitProps = fs::Entry<DirVisit, FileVisit>;
@@ -145,6 +168,12 @@ struct DirVisit {
 struct FileVisit {
     file_type: super::FileType,
     len: u64,
+}
+
+impl TypeChar for FileVisit {
+    fn type_char(&self) -> char {
+        self.file_type.type_char()
+    }
 }
 
 impl<P: Eq> fs::unix::walker::Visitor<P> for TestVisitor<'_, P> {
