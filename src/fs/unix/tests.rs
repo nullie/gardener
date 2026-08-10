@@ -136,22 +136,27 @@ struct TestVisit<P> {
 
 impl std::fmt::Debug for TestVisit<&str> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {}", self.path.display(), self.visit.type_char())?;
+        write!(f, "{:?}", self.path)?;
 
         match self.visit {
-            fs::Entry::Dir(d) => write!(f, " has_children={:?}", d.has_declared_children)?,
-            fs::Entry::File(file_visit) => write!(f, " len={}", file_visit.len)?,
+            fs::Entry::Dir(d) => write!(f, ".visit().dir({:?})", d.has_declared_children)?,
+            fs::Entry::File(file_visit) => write!(
+                f,
+                ".visit({:?}).file({:?})",
+                file_visit.file_type, file_visit.len
+            )?,
         }
 
-        match self.declared.maybe_path_type {
-            Some(path_type) => match path_type {
-                fs::Entry::Dir(d) => write!(f, " d owns_contents={:?}", d.owns_contents)?,
-                fs::Entry::File(file_type) => write!(f, " {}", file_type.type_char())?,
-            },
-            None => write!(f, " none")?,
+        if let Some(path_type) = self.declared.maybe_path_type {
+            match path_type {
+                fs::Entry::Dir(d) => write!(f, ".declared().dir({:?})", d.owns_contents)?,
+                fs::Entry::File(file_type) => write!(f, ".declared().file({file_type:?})")?,
+            }
         }
 
-        write!(f, " {:?}", self.declared.maybe_props)?;
+        if let Some(props) = self.declared.maybe_props {
+            write!(f, ".props({:?})", props)?;
+        }
 
         Ok(())
     }
@@ -210,5 +215,42 @@ impl<P: Eq> fs::unix::walker::Visitor<P> for TestVisitor<'_, P> {
 
     fn visit_error(&mut self, _dir: &Path, _e: std::io::Error) {
         panic!("Unexpected error in visitor")
+    }
+}
+
+trait TestVisitEntry: Sized {
+    fn visit(&'_ self) -> VisitBuilder<'_>;
+}
+
+impl<P> TestVisitEntry for P
+where
+    P: AsRef<Path>,
+{
+    fn visit(&'_ self) -> VisitBuilder<'_> {
+        VisitBuilder {
+            path: self.as_ref(),
+        }
+    }
+}
+
+struct VisitBuilder<'a> {
+    path: &'a Path,
+}
+
+impl<'a> VisitBuilder<'a> {
+    fn dir(self, has_declared_children: bool) -> (&'a Path, TestVisitProps) {
+        (
+            self.path,
+            TestVisitProps::Dir(DirVisit {
+                has_declared_children,
+            }),
+        )
+    }
+
+    fn file(self, file_type: super::FileType, len: u64) -> (&'a Path, TestVisitProps) {
+        (
+            self.path,
+            TestVisitProps::File(FileVisit { file_type, len }),
+        )
     }
 }
