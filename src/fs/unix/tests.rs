@@ -1,12 +1,9 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use pretty_assertions::assert_eq;
 use tempdir::TempDir;
 
-use crate::{
-    decl::{self},
-    fs::{self, TypeChar},
-};
+use crate::decl::{self};
 
 #[test]
 fn test_visitor() {
@@ -35,11 +32,56 @@ fn test_visitor() {
     test_tree.dir("/owning/inside-dir/nested-owning", true, "nested-owning");
     test_tree.file("/non-dir/inside-non-dir", "inside-non-dir");
 
-    let mut visitor = TestVisitor::new(test_dir.tempdir.path());
+    let mut visitor = test_visits::TestVisitor::new(test_dir.tempdir.path());
     super::walker::walk_tree(test_dir.path(), &test_tree.tree, &mut visitor)
         .expect("walk_tree failed");
 
-    assert_eq!(visitor.visits, vec![]);
+    {
+        use test_visits::prelude::*;
+
+        assert_eq!(
+            visitor.visits,
+            vec![
+                "/non-dir"
+                    .visit_file(Declarative(Regular), 0)
+                    .declared_dir(false),
+                "/untracked".visit_dir(false),
+                "/untracked/untracked".visit_file(Declarative(Regular), 0),
+                "/conflicting-type-dir"
+                    .visit_dir(false)
+                    .declared_file(Regular)
+                    .props("conflicting"),
+                "/non-owning"
+                    .visit_dir(true)
+                    .declared_dir(false)
+                    .props("non-owning"),
+                "/non-owning/untracked".visit_file(Declarative(Regular), 0),
+                "/non-owning/intermediate"
+                    .visit_dir(true)
+                    .declared_dir(false),
+                "/non-owning/intermediate/tracked"
+                    .visit_file(Declarative(Regular), 0)
+                    .declared_file(Regular)
+                    .props("non-owning"),
+                "/conflicting-type-file"
+                    .visit_file(Declarative(Regular), 0)
+                    .declared_dir(true)
+                    .props("conflicting"),
+                "/owning".visit_dir(true).declared_dir(true).props("owning"),
+                "/owning/inside-dir"
+                    .visit_dir(true)
+                    .declared_dir(false)
+                    .props("owning"),
+                "/owning/inside-dir/nested-owning"
+                    .visit_dir(false)
+                    .declared_dir(true)
+                    .props("nested-owning"),
+                "/owning/inside-dir/nested-owning/tracked"
+                    .visit_file(Declarative(Regular), 0)
+                    .props("nested-owning"),
+            ]
+        );
+    }
 }
 
 struct TestDir {
@@ -105,152 +147,184 @@ impl<P: Copy + std::fmt::Debug> TestTree<P> {
     }
 }
 
-struct TestVisitor<'a, P> {
-    root: &'a Path,
-    visits: Vec<TestVisit<P>>,
-}
+mod test_visits {
+    use std::path::{Path, PathBuf};
 
-impl<'a, P: Eq> TestVisitor<'a, P> {
-    fn new(root: &'a Path) -> Self {
-        Self {
-            root,
-            visits: Vec::new(),
-        }
+    use crate::{
+        decl::{self},
+        fs::{self, TypeChar, unix},
+    };
+
+    pub mod prelude {
+        pub use super::TestVisitEntry;
+        pub use crate::{decl::FileType::Regular, fs::unix::FileType::Declarative};
     }
 
-    fn report_visit(&mut self, path: &Path, visit: TestVisitProps, declared: decl::Entry<P>) {
-        self.visits.push(TestVisit {
-            path: Path::new("/").join(path.strip_prefix(self.root).expect("path not in root")),
-            visit,
-            declared,
-        });
+    pub struct TestVisitor<'a, P> {
+        root: &'a Path,
+        pub visits: Vec<TestVisit<P>>,
     }
-}
 
-#[derive(PartialEq, Eq)]
-struct TestVisit<P> {
-    path: PathBuf,
-    visit: TestVisitProps,
-    declared: decl::Entry<P>,
-}
-
-impl std::fmt::Debug for TestVisit<&str> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.path)?;
-
-        match self.visit {
-            fs::Entry::Dir(d) => write!(f, ".visit().dir({:?})", d.has_declared_children)?,
-            fs::Entry::File(file_visit) => write!(
-                f,
-                ".visit({:?}).file({:?})",
-                file_visit.file_type, file_visit.len
-            )?,
-        }
-
-        if let Some(path_type) = self.declared.maybe_path_type {
-            match path_type {
-                fs::Entry::Dir(d) => write!(f, ".declared().dir({:?})", d.owns_contents)?,
-                fs::Entry::File(file_type) => write!(f, ".declared().file({file_type:?})")?,
+    impl<'a, P: Eq> TestVisitor<'a, P> {
+        pub fn new(root: &'a Path) -> Self {
+            Self {
+                root,
+                visits: Vec::new(),
             }
         }
 
-        if let Some(props) = self.declared.maybe_props {
-            write!(f, ".props({:?})", props)?;
+        fn report_visit(&mut self, path: &Path, visit: TestVisitProps, declared: decl::Entry<P>) {
+            self.visits.push(TestVisit {
+                path: Path::new("/").join(path.strip_prefix(self.root).expect("path not in root")),
+                visit,
+                declared,
+            });
+        }
+    }
+
+    #[derive(PartialEq, Eq)]
+    pub struct TestVisit<P> {
+        path: PathBuf,
+        visit: TestVisitProps,
+        declared: decl::Entry<P>,
+    }
+
+    impl<P> TestVisit<P> {
+        pub fn declared_dir(mut self, owns_contents: bool) -> Self {
+            self.declared.maybe_path_type =
+                Some(decl::PathType::Dir(decl::DirProps { owns_contents }));
+
+            self
         }
 
-        Ok(())
+        pub fn declared_file(mut self, file_type: decl::FileType) -> Self {
+            self.declared.maybe_path_type = Some(decl::PathType::File(file_type));
+
+            self
+        }
+
+        pub fn props(mut self, props: P) -> Self {
+            self.declared.maybe_props = Some(props);
+
+            self
+        }
     }
-}
 
-type TestVisitProps = fs::Entry<DirVisit, FileVisit>;
+    impl std::fmt::Debug for TestVisit<&str> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{:?}", self.path)?;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct DirVisit {
-    has_declared_children: bool,
-}
+            match self.visit {
+                fs::Entry::Dir(d) => write!(f, ".visit_dir({:?})", d.has_declared_children)?,
+                fs::Entry::File(file_visit) => write!(
+                    f,
+                    ".visit_file({:?}, {:?})",
+                    file_visit.file_type, file_visit.len
+                )?,
+            }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct FileVisit {
-    file_type: super::FileType,
-    len: u64,
-}
+            if let Some(path_type) = self.declared.maybe_path_type {
+                match path_type {
+                    fs::Entry::Dir(d) => write!(f, ".declared_dir({:?})", d.owns_contents)?,
+                    fs::Entry::File(file_type) => write!(f, ".declared_file({file_type:?})")?,
+                }
+            }
 
-impl TypeChar for FileVisit {
-    fn type_char(&self) -> char {
-        self.file_type.type_char()
+            if let Some(props) = self.declared.maybe_props {
+                write!(f, ".props({:?})", props)?;
+            }
+
+            Ok(())
+        }
     }
-}
 
-impl<P: Eq> fs::unix::walker::Visitor<P> for TestVisitor<'_, P> {
-    fn visit_dir(
-        &mut self,
-        path: &Path,
-        declared: decl::Entry<P>,
+    type TestVisitProps = fs::Entry<DirVisit, FileVisit>;
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    struct DirVisit {
         has_declared_children: bool,
-    ) -> std::ops::ControlFlow<(), ()> {
-        self.report_visit(
-            path,
-            TestVisitProps::Dir(DirVisit {
-                has_declared_children,
-            }),
-            declared,
-        );
-
-        std::ops::ControlFlow::Continue(())
     }
 
-    fn visit_file(
-        &mut self,
-        path: &Path,
-        file_type: super::FileType,
-        declared: decl::Entry<P>,
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    struct FileVisit {
+        file_type: unix::FileType,
         len: u64,
-    ) {
-        self.report_visit(
-            path,
-            TestVisitProps::File(FileVisit { file_type, len }),
-            declared,
-        );
     }
 
-    fn visit_error(&mut self, _dir: &Path, _e: std::io::Error) {
-        panic!("Unexpected error in visitor")
-    }
-}
-
-trait TestVisitEntry: Sized {
-    fn visit(&'_ self) -> VisitBuilder<'_>;
-}
-
-impl<P> TestVisitEntry for P
-where
-    P: AsRef<Path>,
-{
-    fn visit(&'_ self) -> VisitBuilder<'_> {
-        VisitBuilder {
-            path: self.as_ref(),
+    impl TypeChar for FileVisit {
+        fn type_char(&self) -> char {
+            self.file_type.type_char()
         }
     }
-}
 
-struct VisitBuilder<'a> {
-    path: &'a Path,
-}
+    impl<P: Eq> fs::unix::walker::Visitor<P> for TestVisitor<'_, P> {
+        fn visit_dir(
+            &mut self,
+            path: &Path,
+            declared: decl::Entry<P>,
+            has_declared_children: bool,
+        ) -> std::ops::ControlFlow<(), ()> {
+            self.report_visit(
+                path,
+                TestVisitProps::Dir(DirVisit {
+                    has_declared_children,
+                }),
+                declared,
+            );
 
-impl<'a> VisitBuilder<'a> {
-    fn dir(self, has_declared_children: bool) -> (&'a Path, TestVisitProps) {
-        (
-            self.path,
-            TestVisitProps::Dir(DirVisit {
-                has_declared_children,
-            }),
-        )
+            std::ops::ControlFlow::Continue(())
+        }
+
+        fn visit_file(
+            &mut self,
+            path: &Path,
+            file_type: unix::FileType,
+            declared: decl::Entry<P>,
+            len: u64,
+        ) {
+            self.report_visit(
+                path,
+                TestVisitProps::File(FileVisit { file_type, len }),
+                declared,
+            );
+        }
+
+        fn visit_error(&mut self, _dir: &Path, _e: std::io::Error) {
+            panic!("Unexpected error in visitor")
+        }
     }
 
-    fn file(self, file_type: super::FileType, len: u64) -> (&'a Path, TestVisitProps) {
-        (
-            self.path,
-            TestVisitProps::File(FileVisit { file_type, len }),
-        )
+    pub trait TestVisitEntry {
+        fn visit_dir<P>(&self, has_declared_children: bool) -> TestVisit<P>;
+        fn visit_file<P>(&self, file_type: unix::FileType, len: u64) -> TestVisit<P>;
+    }
+
+    impl<P> TestVisitEntry for P
+    where
+        P: AsRef<std::path::Path> + ?Sized,
+    {
+        fn visit_dir<Props>(&self, has_declared_children: bool) -> TestVisit<Props> {
+            TestVisit {
+                path: self.as_ref().to_path_buf(),
+                visit: TestVisitProps::Dir(DirVisit {
+                    has_declared_children,
+                }),
+                declared: decl::Entry {
+                    maybe_path_type: None,
+                    maybe_props: None,
+                },
+            }
+        }
+
+        fn visit_file<Props>(&self, file_type: unix::FileType, len: u64) -> TestVisit<Props> {
+            TestVisit {
+                path: self.as_ref().to_path_buf(),
+                visit: TestVisitProps::File(FileVisit { file_type, len }),
+                declared: decl::Entry {
+                    maybe_path_type: None,
+                    maybe_props: None,
+                },
+            }
+        }
     }
 }
