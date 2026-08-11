@@ -5,24 +5,21 @@ use crate::{
         self,
         tree::{NodeChildren, Tree},
     },
-    fs,
+    fs::{self, unix::FileType},
 };
 
-pub type FileType = super::FileType<std::fs::FileType>;
 pub type PathType = fs::Entry<(), FileType>;
 
 impl PathType {
     pub fn from_declarative_path_type(path_type: decl::PathType) -> Self {
-        path_type
-            .map_dir(|_| ())
-            .map_file(|file_type| file_type.map_other(|_| unreachable!()))
+        path_type.map_dir(|_| ())
     }
 
     pub fn from_std_file_type(std_file_type: std::fs::FileType) -> Self {
         if std_file_type.is_dir() {
             Self::Dir(())
         } else {
-            let file_type = if std_file_type.is_file() {
+            let known_file_type = if std_file_type.is_file() {
                 FileType::Regular
             } else if std_file_type.is_symlink() {
                 FileType::Symlink
@@ -32,11 +29,13 @@ impl PathType {
                 FileType::BlockDevice
             } else if std_file_type.is_fifo() {
                 FileType::Fifo
+            } else if std_file_type.is_socket() {
+                FileType::Socket
             } else {
-                FileType::Other(std_file_type)
+                panic!("Unknown file type")
             };
 
-            Self::File(file_type)
+            Self::File(known_file_type)
         }
     }
 }

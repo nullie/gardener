@@ -1,7 +1,3 @@
-use std::convert::Infallible;
-
-use crate::fs::unix;
-
 pub mod tmpfiles;
 pub mod tree;
 
@@ -13,6 +9,7 @@ pub struct Entry<P> {
     pub maybe_props: Option<P>,
 }
 
+pub use crate::fs::unix::FileType;
 pub type PathType = crate::fs::Entry<DirProps, FileType>;
 pub type ExpectedPathType = crate::fs::Entry<(), FileType>;
 
@@ -26,8 +23,6 @@ impl PathType {
 pub struct DirProps {
     pub owns_contents: bool,
 }
-
-pub type FileType = unix::FileType<Infallible>;
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum StorageClass {

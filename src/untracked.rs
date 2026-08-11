@@ -9,7 +9,10 @@ use rootcause::Result;
 use crate::{
     config::Config,
     decl::{self, Owner, Props},
-    fs::{self, unix::walker},
+    fs::{
+        self,
+        unix::{self, walker},
+    },
     presentation::UntrackedPath,
 };
 
@@ -280,7 +283,7 @@ impl<'a> walker::Visitor<Props<'a>> for UntrackedVisitor<'a> {
     fn visit_file(
         &mut self,
         path: &Path,
-        file_type: walker::FileType,
+        file_type: unix::FileType,
         declared: decl::Entry<Props<'a>>,
         _len: u64,
     ) {

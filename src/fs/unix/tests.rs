@@ -153,7 +153,7 @@ mod test_visits {
         fs::{
             self,
             TypeChar,
-            unix::{self, walker},
+            unix::{self},
         },
     };
 
@@ -249,7 +249,7 @@ mod test_visits {
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     struct FileVisit {
-        file_type: unix::FileType<std::fs::FileType>,
+        file_type: unix::FileType,
         len: u64,
     }
 
@@ -280,7 +280,7 @@ mod test_visits {
         fn visit_file(
             &mut self,
             path: &Path,
-            file_type: walker::FileType,
+            file_type: unix::FileType,
             declared: decl::Entry<P>,
             len: u64,
         ) {
@@ -298,7 +298,7 @@ mod test_visits {
 
     pub trait TestVisitEntry {
         fn visit_dir<P>(&self, has_declared_children: bool) -> TestVisit<P>;
-        fn visit_file<P>(&self, file_type: walker::FileType, len: u64) -> TestVisit<P>;
+        fn visit_file<P>(&self, file_type: unix::FileType, len: u64) -> TestVisit<P>;
     }
 
     impl<P> TestVisitEntry for P
@@ -318,7 +318,7 @@ mod test_visits {
             }
         }
 
-        fn visit_file<Props>(&self, file_type: walker::FileType, len: u64) -> TestVisit<Props> {
+        fn visit_file<Props>(&self, file_type: unix::FileType, len: u64) -> TestVisit<Props> {
             TestVisit {
                 path: self.as_ref().to_path_buf(),
                 visit: TestVisitProps::File(FileVisit { file_type, len }),
