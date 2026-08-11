@@ -42,11 +42,9 @@ fn test_visitor() {
         assert_eq!(
             visitor.visits,
             vec![
-                "/non-dir"
-                    .visit_file(Declarative(Regular), 0)
-                    .declared_dir(false),
+                "/non-dir".visit_file(Regular, 0).declared_dir(false),
                 "/untracked".visit_dir(false),
-                "/untracked/untracked".visit_file(Declarative(Regular), 0),
+                "/untracked/untracked".visit_file(Regular, 0),
                 "/conflicting-type-dir"
                     .visit_dir(false)
                     .declared_file(Regular)
@@ -55,16 +53,16 @@ fn test_visitor() {
                     .visit_dir(true)
                     .declared_dir(false)
                     .props("non-owning"),
-                "/non-owning/untracked".visit_file(Declarative(Regular), 0),
+                "/non-owning/untracked".visit_file(Regular, 0),
                 "/non-owning/intermediate"
                     .visit_dir(true)
                     .declared_dir(false),
                 "/non-owning/intermediate/tracked"
-                    .visit_file(Declarative(Regular), 0)
+                    .visit_file(Regular, 0)
                     .declared_file(Regular)
                     .props("non-owning"),
                 "/conflicting-type-file"
-                    .visit_file(Declarative(Regular), 0)
+                    .visit_file(Regular, 0)
                     .declared_dir(true)
                     .props("conflicting"),
                 "/owning".visit_dir(true).declared_dir(true).props("owning"),
@@ -77,7 +75,7 @@ fn test_visitor() {
                     .declared_dir(true)
                     .props("nested-owning"),
                 "/owning/inside-dir/nested-owning/tracked"
-                    .visit_file(Declarative(Regular), 0)
+                    .visit_file(Regular, 0)
                     .props("nested-owning"),
             ]
         );
@@ -152,12 +150,16 @@ mod test_visits {
 
     use crate::{
         decl::{self},
-        fs::{self, TypeChar, unix},
+        fs::{
+            self,
+            TypeChar,
+            unix::{self, walker},
+        },
     };
 
     pub mod prelude {
         pub use super::TestVisitEntry;
-        pub use crate::{decl::FileType::Regular, fs::unix::FileType::Declarative};
+        pub use crate::fs::unix::FileType::Regular;
     }
 
     pub struct TestVisitor<'a, P> {
@@ -247,7 +249,7 @@ mod test_visits {
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     struct FileVisit {
-        file_type: unix::FileType,
+        file_type: unix::FileType<std::fs::FileType>,
         len: u64,
     }
 
@@ -278,7 +280,7 @@ mod test_visits {
         fn visit_file(
             &mut self,
             path: &Path,
-            file_type: unix::FileType,
+            file_type: walker::FileType,
             declared: decl::Entry<P>,
             len: u64,
         ) {
@@ -296,7 +298,7 @@ mod test_visits {
 
     pub trait TestVisitEntry {
         fn visit_dir<P>(&self, has_declared_children: bool) -> TestVisit<P>;
-        fn visit_file<P>(&self, file_type: unix::FileType, len: u64) -> TestVisit<P>;
+        fn visit_file<P>(&self, file_type: walker::FileType, len: u64) -> TestVisit<P>;
     }
 
     impl<P> TestVisitEntry for P
@@ -316,7 +318,7 @@ mod test_visits {
             }
         }
 
-        fn visit_file<Props>(&self, file_type: unix::FileType, len: u64) -> TestVisit<Props> {
+        fn visit_file<Props>(&self, file_type: walker::FileType, len: u64) -> TestVisit<Props> {
             TestVisit {
                 path: self.as_ref().to_path_buf(),
                 visit: TestVisitProps::File(FileVisit { file_type, len }),

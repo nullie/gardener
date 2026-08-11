@@ -4,14 +4,14 @@ use rootcause::Result;
 
 use crate::{
     decl::{self, Props},
-    fs::unix,
+    fs::unix::walker,
 };
 
 pub trait Reporter {
     fn report_file(
         &mut self,
         path: &std::path::Path,
-        file_type: unix::FileType,
+        file_type: walker::FileType,
         len: u64,
         maybe_props: Option<Props>,
     );
@@ -29,13 +29,13 @@ impl<R: Reporter> Visitor<R> {
     pub fn visit_fs(path: &std::path::Path, tree: &crate::decl::Tree, reporter: R) -> Result<R> {
         let mut visitor = Visitor::new(reporter);
 
-        unix::walker::walk_tree(path, tree, &mut visitor)?;
+        walker::walk_tree(path, tree, &mut visitor)?;
 
         Ok(visitor.reporter)
     }
 }
 
-impl<'a, R: Reporter> unix::walker::Visitor<Props<'a>> for Visitor<R> {
+impl<'a, R: Reporter> walker::Visitor<Props<'a>> for Visitor<R> {
     fn visit_dir(
         &mut self,
         _path: &Path,
@@ -56,7 +56,7 @@ impl<'a, R: Reporter> unix::walker::Visitor<Props<'a>> for Visitor<R> {
     fn visit_file(
         &mut self,
         path: &Path,
-        file_type: unix::FileType,
+        file_type: walker::FileType,
         declared: decl::Entry<Props>,
         len: u64,
     ) {

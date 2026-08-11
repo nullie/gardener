@@ -1,9 +1,45 @@
-use std::{fs, ops::ControlFlow, path::Path};
+use std::{ops::ControlFlow, os::unix::fs::FileTypeExt as _, path::Path};
 
-use crate::decl::{
-    self,
-    tree::{NodeChildren, Tree},
+use crate::{
+    decl::{
+        self,
+        tree::{NodeChildren, Tree},
+    },
+    fs,
 };
+
+pub type FileType = super::FileType<std::fs::FileType>;
+pub type PathType = fs::Entry<(), FileType>;
+
+impl PathType {
+    pub fn from_declarative_path_type(path_type: decl::PathType) -> Self {
+        path_type
+            .map_dir(|_| ())
+            .map_file(|file_type| file_type.map_other(|_| unreachable!()))
+    }
+
+    pub fn from_std_file_type(std_file_type: std::fs::FileType) -> Self {
+        if std_file_type.is_dir() {
+            Self::Dir(())
+        } else {
+            let file_type = if std_file_type.is_file() {
+                FileType::Regular
+            } else if std_file_type.is_symlink() {
+                FileType::Symlink
+            } else if std_file_type.is_char_device() {
+                FileType::CharDevice
+            } else if std_file_type.is_block_device() {
+                FileType::BlockDevice
+            } else if std_file_type.is_fifo() {
+                FileType::Fifo
+            } else {
+                FileType::Other(std_file_type)
+            };
+
+            Self::File(file_type)
+        }
+    }
+}
 
 pub trait Visitor<P> {
     fn visit_dir(
@@ -12,13 +48,7 @@ pub trait Visitor<P> {
         declared: decl::Entry<P>,
         has_declared_children: bool,
     ) -> ControlFlow<(), ()>;
-    fn visit_file(
-        &mut self,
-        path: &Path,
-        file_type: super::FileType,
-        declared: decl::Entry<P>,
-        len: u64,
-    );
+    fn visit_file(&mut self, path: &Path, file_type: FileType, declared: decl::Entry<P>, len: u64);
     fn visit_error(&mut self, dir: &Path, e: std::io::Error);
 }
 
@@ -36,7 +66,7 @@ fn walk_dir<P: Copy + std::fmt::Debug>(
     inherited_props: Option<P>,
     visitor: &mut impl Visitor<P>,
 ) -> Result<(), std::io::Error> {
-    match fs::read_dir(dir) {
+    match std::fs::read_dir(dir) {
         Ok(entries) => {
             for entry_result in entries {
                 match entry_result {
@@ -66,7 +96,7 @@ fn process_entry<P: Copy + std::fmt::Debug>(
 ) -> Result<(), std::io::Error> {
     let metadata = entry.metadata()?;
     let path = entry.path();
-    let path_type = crate::fs::unix::PathType::from_std_file_type(entry.file_type()?);
+    let path_type = PathType::from_std_file_type(entry.file_type()?);
     let maybe_tree_node =
         maybe_node_children.and_then(|tree_dir| tree_dir.get(entry.file_name().as_os_str()));
 

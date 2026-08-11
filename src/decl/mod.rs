@@ -1,4 +1,6 @@
-use crate::fs::TypeChar;
+use std::convert::Infallible;
+
+use crate::fs::unix;
 
 pub mod tmpfiles;
 pub mod tree;
@@ -25,26 +27,7 @@ pub struct DirProps {
     pub owns_contents: bool,
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
-pub enum FileType {
-    Regular,
-    Symlink,
-    Fifo,
-    CharDevice,
-    BlockDevice,
-}
-
-impl TypeChar for FileType {
-    fn type_char(&self) -> char {
-        match self {
-            Self::Regular => 'f',
-            Self::Symlink => 'l',
-            Self::Fifo => 'p',
-            Self::CharDevice => 'c',
-            Self::BlockDevice => 'b',
-        }
-    }
-}
+pub type FileType = unix::FileType<Infallible>;
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum StorageClass {

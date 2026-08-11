@@ -1,14 +1,14 @@
 use std::path::Path;
 
-use crate::fs::{self, TypeChar};
+use crate::fs::{TypeChar, unix::walker};
 
 pub struct UntrackedPath<P: AsRef<Path>> {
     pub path: P,
-    pub path_type: fs::unix::PathType,
+    pub path_type: walker::PathType,
 }
 
 impl<P: AsRef<Path>> UntrackedPath<P> {
-    pub fn new(path: P, path_type: fs::unix::PathType) -> Self {
+    pub fn new(path: P, path_type: walker::PathType) -> Self {
         Self { path, path_type }
     }
 }

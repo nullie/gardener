@@ -7,7 +7,7 @@ use rootcause::Result;
 use crate::{
     config::Config,
     decl::Props,
-    fs::{self, unix},
+    fs::{self, unix::walker},
     presentation::UntrackedPath,
 };
 
@@ -26,7 +26,7 @@ impl file_visitor::Reporter for LsReporter {
     fn report_file(
         &mut self,
         path: &std::path::Path,
-        file_type: unix::FileType,
+        file_type: walker::FileType,
         len: u64,
         maybe_props: Option<Props>,
     ) {
@@ -69,7 +69,7 @@ impl file_visitor::Reporter for SizeReporter {
     fn report_file(
         &mut self,
         _path: &std::path::Path,
-        _file_type: unix::FileType,
+        _file_type: walker::FileType,
         len: u64,
         _maybe_props: Option<Props>,
     ) {
