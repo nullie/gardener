@@ -62,23 +62,28 @@
             gardener = default;
           };
 
-          pre-commit.settings.hooks = {
-            cargo-check.enable = true;
-            cargo-sort.enable = true;
-            clippy = {
-              enable = true;
-              settings.allowedLints = [ "clippy::pedantic" ];
-              settings.denyWarnings = true;
+          pre-commit.settings = {
+            settings.rust.check.cargoDeps = pkgs.rustPlatform.importCargoLock {
+              lockFile = ./Cargo.lock;
             };
-            rustfmt = {
-              enable = true;
-              package = rustfmt;
+            hooks = {
+              cargo-check.enable = true;
+              cargo-sort.enable = true;
+              clippy = {
+                enable = true;
+                settings.allowedLints = [ "clippy::pedantic" ];
+                settings.denyWarnings = true;
+              };
+              rustfmt = {
+                enable = true;
+                package = rustfmt;
+              };
+
+              nixfmt.enable = true;
+              statix.enable = true;
+
+              keep-sorted.enable = true;
             };
-
-            nixfmt.enable = true;
-            statix.enable = true;
-
-            keep-sorted.enable = true;
           };
 
           devShells = {
