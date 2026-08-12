@@ -39,21 +39,24 @@ fn test_visitor() {
     {
         use test_visits::prelude::*;
 
+        visitor.visits.sort_by(|a, b| a.path.cmp(&b.path));
+
         assert_eq!(
             visitor.visits,
             vec![
-                "/non-dir".visit_file(Regular, 0).declared_dir(false),
-                "/untracked".visit_dir(false),
-                "/untracked/untracked".visit_file(Regular, 0),
                 "/conflicting-type-dir"
                     .visit_dir(false)
                     .declared_file(Regular)
                     .props("conflicting"),
+                "/conflicting-type-file"
+                    .visit_file(Regular, 0)
+                    .declared_dir(true)
+                    .props("conflicting"),
+                "/non-dir".visit_file(Regular, 0).declared_dir(false),
                 "/non-owning"
                     .visit_dir(true)
                     .declared_dir(false)
                     .props("non-owning"),
-                "/non-owning/untracked".visit_file(Regular, 0),
                 "/non-owning/intermediate"
                     .visit_dir(true)
                     .declared_dir(false),
@@ -61,10 +64,7 @@ fn test_visitor() {
                     .visit_file(Regular, 0)
                     .declared_file(Regular)
                     .props("non-owning"),
-                "/conflicting-type-file"
-                    .visit_file(Regular, 0)
-                    .declared_dir(true)
-                    .props("conflicting"),
+                "/non-owning/untracked".visit_file(Regular, 0),
                 "/owning".visit_dir(true).declared_dir(true).props("owning"),
                 "/owning/inside-dir"
                     .visit_dir(true)
@@ -77,6 +77,8 @@ fn test_visitor() {
                 "/owning/inside-dir/nested-owning/tracked"
                     .visit_file(Regular, 0)
                     .props("nested-owning"),
+                "/untracked".visit_dir(false),
+                "/untracked/untracked".visit_file(Regular, 0),
             ]
         );
     }
@@ -186,9 +188,9 @@ mod test_visits {
 
     #[derive(PartialEq, Eq)]
     pub struct TestVisit<P> {
-        path: PathBuf,
-        visit: TestVisitProps,
-        declared: decl::Entry<P>,
+        pub path: PathBuf,
+        pub visit: TestVisitProps,
+        pub declared: decl::Entry<P>,
     }
 
     impl<P> TestVisit<P> {
