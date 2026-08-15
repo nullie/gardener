@@ -24,6 +24,14 @@ pub fn check_untracked() -> Result<()> {
 
     walker::walk_tree(Path::new("/"), &tree, &mut visitor)?;
 
+    visitor
+        .untracked
+        .sort_unstable_by(|a, b| a.path.cmp(&b.path));
+
+    for files in visitor.tracked_by_disabled_module.values_mut() {
+        files.sort_unstable_by(|a, b| a.path.cmp(&b.path));
+    }
+
     visitor.print_report();
 
     Ok(())

@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  gardenerPkgs,
   ...
 }:
 {
@@ -58,6 +59,9 @@
     in
     {
       enable = lib.mkEnableOption "Enable gardener";
+      package = lib.mkPackageOption gardenerPkgs "gardener" {
+        extraDescription = "The gardener package to use (defaults to be built from source)";
+      };
       availableModules = {
         system = lib.mkOption {
           type = types.attrsOf systemModuleConfig;
@@ -122,6 +126,6 @@
   config.environment = lib.mkIf config.services.gardener.enable {
     etc."gardener.json".text = builtins.toJSON config.services.gardener;
 
-    systemPackages = [ pkgs.gardener ];
+    systemPackages = [ config.services.gardener.package ];
   };
 }

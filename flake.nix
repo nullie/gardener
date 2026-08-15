@@ -23,6 +23,16 @@
       self,
       ...
     }:
+    let
+      mkGardenerPkgs = pkgs: {
+        gardener = pkgs.rustPlatform.buildRustPackage {
+          name = "gardener";
+          src = ./.;
+
+          cargoLock.lockFile = ./Cargo.lock;
+        };
+      };
+    in
     inputs.flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [
         inputs.git-hooks-nix.flakeModule
@@ -52,15 +62,13 @@
             config = { };
           };
 
-          packages = rec {
-            default = pkgs.rustPlatform.buildRustPackage {
-              name = "gardener";
-              src = ./.;
-
-              cargoLock.lockFile = ./Cargo.lock;
+          packages =
+            let
+              gardenerPkgs = mkGardenerPkgs pkgs;
+            in
+            {
+              default = gardenerPkgs.gardener;
             };
-            gardener = default;
-          };
 
           pre-commit.settings = {
             settings.rust.check.cargoDeps = pkgs.rustPlatform.importCargoLock {
@@ -121,7 +129,7 @@
               };
             in
             {
-              hello-world-server = import ./nixos/tests/foo.nix checkArgs;
+              check-untracked = import ./nixos/tests/check-untracked checkArgs;
             };
 
         };
@@ -130,23 +138,8 @@
         { ... }:
         {
           imports = [
-            ./nixos
+            (args@{ pkgs, ... }: import ./nixos (args // { gardenerPkgs = mkGardenerPkgs pkgs; }))
           ];
-
-          nixpkgs.overlays =
-            let
-              overlay =
-                final: prev:
-                let
-                  inherit (prev.stdenv.hostPlatform) system;
-                in
-                {
-                  inherit (self.packages.${system}) gardener;
-                };
-            in
-            [
-              overlay
-            ];
         };
     };
 }
