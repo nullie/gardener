@@ -245,12 +245,12 @@ mod test_visits {
     type TestVisitProps = fs::Entry<DirVisit, FileVisit>;
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    struct DirVisit {
+    pub struct DirVisit {
         has_declared_children: bool,
     }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    struct FileVisit {
+    pub struct FileVisit {
         file_type: unix::FileType,
         len: u64,
     }

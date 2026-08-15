@@ -71,8 +71,11 @@
               cargo-sort.enable = true;
               clippy = {
                 enable = true;
-                settings.allowedLints = [ "clippy::pedantic" ];
-                settings.denyWarnings = true;
+                settings = {
+                  allowedLints = [ "clippy::pedantic" ];
+                  denyWarnings = true;
+                  extraArgs = "--all-targets";
+                };
               };
               rustfmt = {
                 enable = true;
