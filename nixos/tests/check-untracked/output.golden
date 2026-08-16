@@ -1,6 +1,12 @@
 Untracked paths:
   d /nix/.ro-store
   d /nix/.rw-store
+  b /untracked-block
+  c /untracked-char
+  p /untracked-fifo
+  f /untracked-file
+  s /untracked-sock
+  l /untracked-symlink
   d /var/lib/dhcpcd
 
 Tracked by disabled modules:
