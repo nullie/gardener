@@ -38,7 +38,7 @@
             ) gardenerConfig.availableModules.user;
             adhocModules = userConfig.adhoc;
             modules = builtins.attrValues enabledModules ++ builtins.attrValues adhocModules;
-            relativePaths = builtins.concatLists (builtins.map moduleToPaths modules);
+            relativePaths = builtins.concatLists (map moduleToPaths modules);
           in
           map (relativePath: "${userConfig.home}/${relativePath}") relativePaths
         ) gardenerConfig.users
