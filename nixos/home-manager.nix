@@ -1,6 +1,6 @@
 { config, lib, ... }:
 {
-  services.gardener.users = builtins.mapAttrs (userName: hmConfig: {
+  services.gardener.users = builtins.mapAttrs (_userName: hmConfig: {
     adhoc.home-manager = {
       cache.directories = [ ".local/state/home-manager/gcroots" ];
 

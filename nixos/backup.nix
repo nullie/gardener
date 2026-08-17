@@ -31,7 +31,7 @@
 
       userPaths = builtins.concatLists (
         lib.mapAttrsToList (
-          userName: userConfig:
+          _userName: userConfig:
           let
             enabledModules = lib.filterAttrs (
               name: _: userConfig.modules.${name} or false

@@ -1,5 +1,4 @@
-{ config, lib, ... }:
-{
+_: {
   services.gardener.availableModules.user = {
     # keep-sorted start block=yes
     android-tools.data.directories = [ ".android" ];
