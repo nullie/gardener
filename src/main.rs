@@ -32,6 +32,7 @@ enum CheckUntrackedSubCommand {
 enum BackupSubcommand {
     Ls,
     Size,
+    Exclude,
 }
 
 fn main() -> Result<(), rootcause::compat::MainReport> {
@@ -52,12 +53,11 @@ fn main() -> Result<(), rootcause::compat::MainReport> {
             opt_command: Some(CheckUntrackedSubCommand::Plain),
         } => gardener::untracked::print_untracked(),
         Command::CheckTracked => gardener::tracked::check_tracked(),
-        Command::Backup {
-            command: BackupSubcommand::Ls,
-        } => gardener::backup::ls(),
-        Command::Backup {
-            command: BackupSubcommand::Size,
-        } => gardener::backup::size(),
+        Command::Backup { command } => match command {
+            BackupSubcommand::Ls => gardener::backup::ls(),
+            BackupSubcommand::Size => gardener::backup::size(),
+            BackupSubcommand::Exclude => gardener::backup::exclude(),
+        },
     }?;
 
     Ok(())

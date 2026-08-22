@@ -15,6 +15,12 @@ impl PathType {
         path_type.map_dir(|_| ())
     }
 
+    pub fn matches(&self, maybe_path_type: Option<decl::PathType>) -> bool {
+        maybe_path_type.is_none_or(|declared_path_type| {
+            self == &Self::from_declarative_path_type(declared_path_type)
+        })
+    }
+
     pub fn from_std_file_type(std_file_type: std::fs::FileType) -> Self {
         if std_file_type.is_dir() {
             Self::Dir(())
