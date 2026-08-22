@@ -1,3 +1,4 @@
+mod exclude_visitor;
 mod file_visitor;
 
 use std::path::Path;
@@ -79,3 +80,23 @@ impl file_visitor::Reporter for SizeReporter {
         self.size += len;
     }
 }
+
+pub fn exclude() -> Result<()> {
+    let config = Config::load()?;
+    let tree = config.to_tree()?;
+
+    exclude_visitor::Visitor::visit_fs(Path::new("/"), &tree, ExcludeReporter)?;
+
+    Ok(())
+}
+
+struct ExcludeReporter;
+
+impl exclude_visitor::Reporter for ExcludeReporter {
+    fn exclude(&mut self, path: &std::path::Path, path_type: unix::walker::PathType) {
+        println!("{}", UntrackedPath::new(path, path_type));
+    }
+}
+
+#[cfg(test)]
+mod tests;
