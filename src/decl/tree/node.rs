@@ -11,7 +11,7 @@ pub type Node<P> = fs::Entry<Dir<P>, File<P>>;
 
 pub struct Dir<P> {
     pub children: NodeChildren<P>,
-    pub kind: DirKind<P>,
+    pub(super) kind: DirKind<P>,
 }
 
 pub struct File<P> {
@@ -20,7 +20,7 @@ pub struct File<P> {
 }
 
 #[derive(Debug)]
-pub enum DirKind<P> {
+pub(super) enum DirKind<P> {
     OwnsContents(P),
     Empty(Option<P>),
 }

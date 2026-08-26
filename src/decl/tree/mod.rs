@@ -8,7 +8,8 @@ use std::{
 
 use thiserror::Error;
 
-pub use self::node::{DirKind, Node, NodeChildren};
+use self::node::DirKind;
+pub use self::node::{Node, NodeChildren};
 use crate::decl::{self, PathType};
 
 pub struct Tree<P> {

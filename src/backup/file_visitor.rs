@@ -7,7 +7,7 @@ use crate::{
     fs::unix::{self, walker},
 };
 
-pub trait Reporter {
+pub(super) trait Reporter {
     fn report_file(
         &mut self,
         path: &std::path::Path,
@@ -17,16 +17,20 @@ pub trait Reporter {
     );
 }
 
-pub struct Visitor<R: Reporter> {
+pub(super) struct Visitor<R: Reporter> {
     reporter: R,
 }
 
 impl<R: Reporter> Visitor<R> {
-    pub fn new(reporter: R) -> Self {
+    pub(super) fn new(reporter: R) -> Self {
         Self { reporter }
     }
 
-    pub fn visit_fs(path: &std::path::Path, tree: &crate::decl::Tree, reporter: R) -> Result<R> {
+    pub(super) fn visit_fs(
+        path: &std::path::Path,
+        tree: &crate::decl::Tree,
+        reporter: R,
+    ) -> Result<R> {
         let mut visitor = Visitor::new(reporter);
 
         walker::walk_tree(path, tree, &mut visitor)?;
