@@ -11,13 +11,6 @@ pub struct Entry<P> {
 
 pub use crate::fs::unix::FileType;
 pub type PathType = crate::fs::Entry<DirProps, FileType>;
-pub type ExpectedPathType = crate::fs::Entry<(), FileType>;
-
-impl PathType {
-    pub fn expected_path_type(self) -> ExpectedPathType {
-        self.map_dir(|_| ())
-    }
-}
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub struct DirProps {
