@@ -115,6 +115,8 @@
                 ++ config.pre-commit.settings.enabledPackages;
 
               RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
+              # Do not stop on warnings for development cargo test
+              CARGO_BUILD_WARNINGS = "warn";
             };
           };
 
