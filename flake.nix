@@ -133,7 +133,7 @@
               };
             in
             {
-              check-untracked = import ./nixos/tests/check-untracked checkArgs;
+              test-check-untracked = import ./nixos/tests/check-untracked checkArgs;
             };
 
         };
