@@ -1,4 +1,6 @@
 mod node;
+#[cfg(test)]
+pub mod util;
 
 use std::{
     collections::{BTreeMap, btree_map},
