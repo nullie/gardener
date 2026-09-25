@@ -23,7 +23,10 @@ _: {
       cache.files = [ ".cache/dconf/user" ];
     };
     ddcutil.cache.directories = [ ".cache/ddcutil" ];
-    dgop.data.files = [ ".config/dgop/colors.json" ];
+    dgop.data.files = [
+      ".config/dgop/colors.json"
+      ".config/dgop/keybinds.json"
+    ];
     direnv.data.directories = [ ".local/share/direnv/allow" ];
     discord.data.directories = [ ".config/discord" ];
     dms = {
@@ -36,6 +39,7 @@ _: {
         ".config/DankMaterialShell/.firstlaunch"
         ".config/DankMaterialShell/.changelog-1.4"
         ".config/DankMaterialShell/.changelog-1.5"
+        ".config/DankMaterialShell/.changelog-1.6"
         ".local/state/DankMaterialShell/appusage.json"
         ".local/state/DankMaterialShell/notepad-session.json"
       ];
