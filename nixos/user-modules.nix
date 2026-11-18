@@ -32,19 +32,25 @@ _: {
     dms = {
       cache.directories = [
         ".cache/dms"
-        ".cache/DankMaterialShell"
       ];
-      data.directories = [ ".local/state/DankMaterialShell/notepad-files" ];
+      data.directories = [
+        ".config/dms/themes"
+        ".local/state/dms/notepad-files"
+        ".local/state/dms/pam"
+        ".local/state/dms/wellbeing"
+      ];
       data.files = [
-        ".config/DankMaterialShell/.firstlaunch"
-        ".config/DankMaterialShell/.changelog-1.4"
-        ".config/DankMaterialShell/.changelog-1.5"
-        ".config/DankMaterialShell/.changelog-1.6"
-        ".local/state/DankMaterialShell/appusage.json"
-        ".local/state/DankMaterialShell/notepad-session.json"
+        ".config/dms/.firstlaunch"
+        ".config/dms/.changelog-1.4"
+        ".config/dms/.changelog-1.5"
+        ".config/dms/.changelog-1.6"
+        ".config/dms/.changelog-2.0"
+        ".config/dms/.changelog-2.1"
+        ".local/state/dms/appusage.json"
+        ".local/state/dms/notepad-session.json"
       ];
       ephemeral.files = [
-        ".config/DankMaterialShell/firefox.css"
+        ".config/dms/firefox.css"
         ".config/alacritty/dank-theme.toml"
         ".config/cosmic/com.system76.CosmicTheme.Mode/v1/is_dark"
         ".config/gtk-3.0/dank-colors.css"
@@ -52,6 +58,11 @@ _: {
         ".local/share/color-schemes/DankMatugen.colors"
         ".local/share/color-schemes/DankMatugenDark.colors"
         ".local/share/color-schemes/DankMatugenLight.colors"
+      ];
+      ephemeral.symlinks = [
+        ".cache/DankMaterialShell"
+        ".config/DankMaterialShell"
+        ".local/state/DankMaterialShell"
       ];
     };
     electron.cache.directories = [ ".config/Electron" ];
