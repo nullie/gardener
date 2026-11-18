@@ -91,6 +91,7 @@
         "/var/spool/cups"
       ];
     };
+    flatpak.data.directories = [ "/var/lib/flatpak" ];
     hwclock.data.files = [ "/etc/adjtime" ];
     lastlog2 = {
       data.files = [

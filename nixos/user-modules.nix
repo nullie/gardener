@@ -71,6 +71,10 @@ _: {
       cache.directories = [ ".cache/mozilla/firefox" ];
       data.directories = [ ".config/mozilla/firefox" ];
     };
+    flatpak = {
+      cache.directories = [ ".cache/flatpak" ];
+      data.directories = [ ".local/share/flatpak" ];
+    };
     fontconfig.cache.directories = [ ".cache/fontconfig" ];
     freecad = {
       cache.directories = [ ".cache/FreeCAD" ];
