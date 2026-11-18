@@ -11,7 +11,15 @@ _: {
       ];
     };
     bash.data.files = [ ".bash_history" ];
-    borg.cache.directories = [ ".cache/borg" ];
+    borg = {
+      cache.directories = [
+        ".cache/borg"
+      ];
+      data.directories = [
+        # TODO: can be treated as cache?
+        ".config/borg/security"
+      ];
+    };
     btop.data.files = [
       ".config/btop/btop.conf"
       ".local/state/btop.log"
