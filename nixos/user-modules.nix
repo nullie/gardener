@@ -227,6 +227,13 @@ _: {
     };
     telescope-nvim.data.files = [ ".local/share/nvim/telescope_history" ];
     treefmt.cache.directories = [ ".cache/treefmt" ];
+    uv = {
+      cache.directories = [
+        ".cache/uv"
+        ".local/share/uv/python"
+      ];
+      data.directories = [ ".local/share/uv/credentials" ];
+    };
     vulkan.cache.directories = [ ".local/share/vulkan" ];
     wireplumber.data.directories = [ ".local/state/wireplumber" ];
     zoxide.data.directories = [ ".local/share/zoxide" ];
