@@ -236,6 +236,14 @@ _: {
       data.directories = [ ".local/share/uv/credentials" ];
     };
     vulkan.cache.directories = [ ".local/share/vulkan" ];
+    weechat = {
+      cache.directories = [ ".cache/weechat" ];
+      data.directories = [
+        ".config/weechat"
+        ".local/share/weechat"
+        ".local/state/weechat"
+      ];
+    };
     wireplumber.data.directories = [ ".local/state/wireplumber" ];
     zoxide.data.directories = [ ".local/share/zoxide" ];
     zsh = {
