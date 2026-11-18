@@ -161,6 +161,7 @@ _: {
     obsidian.data.directories = [ ".config/obsidian" ];
     oh-my-zsh.cache.directories = [ ".cache/oh-my-zsh" ];
     pavucontrol.data.files = [ ".config/pavucontrol.ini" ];
+    pip.cache.directories = [ ".cache/pip" ];
     pre-commit.cache.directories = [ ".cache/pre-commit" ];
     prusa-slicer = {
       cache.directories = [ ".cache/prusa-slicer" ];
